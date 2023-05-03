@@ -1,0 +1,1 @@
+void ppu_tick();
