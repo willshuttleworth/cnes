@@ -1,8 +1,8 @@
-main: main.c cpu.o ppu.o
-	gcc -Wall -g -o main main.c cpu.o ppu.o
+main: main.c cpu/cpu.o ppu/ppu.o
+	gcc -Wall -g -o main main.c cpu/cpu.o ppu/ppu.o
 
-cpu.o: cpu.c
-	gcc -Wall -c cpu.c
+cpu/cpu.o: cpu/cpu.c
+	gcc -Wall -c -g cpu/cpu.c
 
-ppu.o: ppu.c
-	gcc -Wall -c ppu.c
+ppu/ppu.o: ppu/ppu.c
+	gcc -Wall -c -g ppu/ppu.c

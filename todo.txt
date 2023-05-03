@@ -1,0 +1,4 @@
+    1. figure out entire isa lol
+        - opcodes first
+        - then be able to read the test rom and work through that
+    2. learn how ppu works
