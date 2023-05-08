@@ -8,7 +8,9 @@ void tick(unsigned int *cycle) {
     ppu_tick_to(*cycle);
 }
 
-int main() {
+int main(int argc, char **argv) {
+    //read rom from cmdline arg
+    printf("%d\n", argc);
     unsigned int cycle = 0;
     for(int i = 0; i < 10; i++) {
         tick(&cycle);
