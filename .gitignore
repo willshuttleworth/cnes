@@ -1,3 +1,6 @@
 *.o
 *.txt
+*.dSYM
 !todo.txt
+main
+
