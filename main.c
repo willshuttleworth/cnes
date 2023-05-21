@@ -31,6 +31,12 @@ int main(int argc, char **argv) {
             printf("invalid file\n");
             exit(0);
         }
+        for(int i = 0; i < 18; i++) {
+            char byte;
+            fread(&byte, sizeof(char), 1, file);
+            printf("byte %d: %x\n", i, byte);
+        }
+        exit(0);
         //read each instruction into an array
         Header h;
         fread(&h, sizeof(Header), 1, file);
@@ -45,12 +51,13 @@ int main(int argc, char **argv) {
         if((h.flags6 >> 2) | 0) {
             fseek(file, 512, SEEK_CUR);
         }
-        printf("%d\n", SEEK_CUR);
         //read actual code lol
         // just reading first byte
         char first;
+        printf("pos: %d\n", ftell(file));
         fread(&first, sizeof(char), 1, file);
-        printf("first opcode: %x %d\n", first, first);
+        printf("first opcode: %x\n", first);
+        printf("pos: %d\n", ftell(file));
         fclose(file);
     }
     else {
