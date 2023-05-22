@@ -17,6 +17,8 @@ typedef struct Header {
     char padding[5];
 }Header;
 
+//addressing modes
+//char impl[] = {0x00, 0x08, 0x
 void tick(unsigned int *cycle) {
     cycle++;
     cpu_tick_to(*cycle);
@@ -31,46 +33,61 @@ int main(int argc, char **argv) {
             printf("invalid file\n");
             exit(0);
         }
-        for(int i = 0; i < 18; i++) {
-            char byte;
-            fread(&byte, sizeof(char), 1, file);
-            printf("byte %d: %x\n", i, byte);
-        }
-        exit(0);
         //read each instruction into an array
         Header h;
         fread(&h, sizeof(Header), 1, file);
-        printf("magic num: %s\n", h.magic_num);
-        printf("%d %d\n", h.prg_rom_size, h.chr_rom_size);
-        printf("%d\n", h.flags6);
-        printf("%d\n", h.flags7);
-        printf("%d\n", h.flags8);
-        printf("%d\n", h.flags9);
-        printf("%d\n", h.flags10);
         //checking if trainer is present
         if((h.flags6 >> 2) | 0) {
             fseek(file, 512, SEEK_CUR);
         }
-        //read actual code lol
-        // just reading first byte
-        char first;
-        printf("pos: %d\n", ftell(file));
-        fread(&first, sizeof(char), 1, file);
-        printf("first opcode: %x\n", first);
-        printf("pos: %d\n", ftell(file));
+        //unsigned int cycle = 0;
+
+        //parse instruction (have addressing modes grouped so it reads enough data and sends to cpu/ppu
+        while(!feof(file)) {
+            /*
+            char opcode = 0;
+            fread(&opcode, sizeof(char), 1, file);
+            printf("%x\n", opcode);
+            */
+            unsigned char opcode = 0;
+            fread(&opcode, sizeof(char), 1, file);
+
+            //impl
+            unsigned char lshift = (unsigned char) (opcode << 4); 
+            int high_nibble = 0; 
+            if(lshift == 0x0) {
+                if((opcode == 0x0) || (opcode == 0x40) || (opcode == 0x60)) {
+                    high_nibble = 1;
+                }
+            }
+            else if(lshift == 0xA0) {
+                if(opcode >> 4 >= 0x8 && opcode >> 4 <= 0xE) {
+                    high_nibble = 1;
+                }
+            }
+            if((lshift == 0x80) || (lshift == 0x0 && high_nibble) || (lshift == 0xA0 && high_nibble)) {
+                //pass opcode (no operands) to cpu
+                printf("impl: %x\n", opcode);
+            }
+    
+            //acc
+
+        } 
+     
+        /*
+         * clock "catches up" to cpu/ppu
+         * cpu/ppu execute instruction, then wait until clock is caught back up to their cycle count before 
+        for(int i = 0; i < 10; i++) {
+            tick(&cycle);
+        }
+        */
+        
+
         fclose(file);
     }
     else {
         printf("usage:\t./main <path/to/rom/>\n");
         exit(0);
     }
-    unsigned int cycle = 0;
-
-    /*
-    for(int i = 0; i < 10; i++) {
-        tick(&cycle);
-    }
-    */
-    
     return 0;
 }
