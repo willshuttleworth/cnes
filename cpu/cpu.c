@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "../main.c"
 
 typedef struct CPU {
     //cpu can mark that it is ready to receive next instruction from main
@@ -32,6 +31,7 @@ CPU cpu = { .ready = 1,
 void exec_instr(char *instr, int num_operands) {
     
 }
+
 void cpu_tick_to(unsigned int cycle) {
     printf("stepping up to cycle number %d from cycle number %d\n", cycle, cpu.cycle);
     while(cpu.cycle < cycle) {

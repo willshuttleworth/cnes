@@ -1,5 +1,8 @@
-main: main.c cpu/cpu.o ppu/ppu.o
-	gcc -Wall -g -o main main.c cpu/cpu.o ppu/ppu.o
+main: main.c cpu.o ppu.o parser.o
+	gcc -Wall -g -o main main.c cpu.o ppu.o parser.o
+
+parser.o: parser.c
+	gcc -Wall -g -c parser.c
 
 cpu/cpu.o: cpu/cpu.c
 	gcc -Wall -c -g cpu/cpu.c

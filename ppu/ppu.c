@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include "../main.c"
 
 typedef struct PPU {
     //cycle that ppu is on. increase until it matches overall clock

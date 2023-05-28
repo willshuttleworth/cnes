@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <sys/stat.h> //fstat
 
+#include "parser.h"
 #include "cpu/cpu.h"
 #include "ppu/ppu.h"
 
@@ -18,8 +19,6 @@ typedef struct Header {
     char padding[5];
 }Header;
 
-//addressing modes
-//char impl[] = {0x00, 0x08, 0x
 void tick(unsigned int *cycle) {
     cycle++;
     cpu_tick_to(*cycle);
@@ -55,7 +54,8 @@ int main(int argc, char **argv) {
         file_stats.st_mode = 0;
 
         fstat(fileno(file), &file_stats); //better to use c library wrappers over syscalls? idk
-        unsigned char *instructions = malloc(file_stats.st_size - sizeof(Header));
+        int num_bytes = file_stats.st_size;
+        unsigned char *instructions = malloc(num_bytes - sizeof(Header));
         
         //read all bytes of rom into an array
         //should this be read into an array? (yes should be stored in memory and read in once from file)
@@ -65,36 +65,23 @@ int main(int argc, char **argv) {
             i++;
         } 
 
-        printf("%d\n", (0x0A >> 4) % 2);
         //main execution loop. cpu will pass next pc as return val of execution instruction halt will be encoded as null/negative val
         int j = 0;
-        while(j < file_stats.st_size) {
-            unsigned char opcode = instructions[j];
-
-            //impl
-            unsigned char lshift = (unsigned char) (opcode << 4); 
-            int high_nibble = 0; 
-            if(lshift == 0x0) {
-                if((opcode == 0x0) || (opcode == 0x40) || (opcode == 0x60)) {
-                    high_nibble = 1;
+        while(j < num_bytes) {
+            //operands[0] = number of operands
+            //operands[1..num_operands] = each operand
+            unsigned char *operands = parse(instructions, j, num_bytes);
+            if(operands != NULL) {
+                for(i = 1; i <= operands[0]; i++) {
+                    printf("%x ", operands[i]);
                 }
+                printf("\n");
+                j += operands[0]; 
+                free(operands);
             }
-            else if(lshift == 0xA0) {
-                if((opcode >> 4 >= 0x7 && opcode >> 4 <= 0xF) || ((opcode >> 4) % 2 != 0)) {
-                    high_nibble = 1;
-                }
+            else {
+                j++;
             }
-            if((lshift == 0x80) || (lshift == 0x0 && high_nibble) || (lshift == 0xA0 && high_nibble)) {
-                //pass opcode (no operands) to cpu
-                printf("impl: %x\n", opcode);
-            }
-             
-            //acc (lo nibble is a and hi is 0,2,4,6)
-            if(lshift == 0xA0 && (opcode >> 4 < 0x7) && ((opcode >> 4) % 2 == 0)) {
-                //pass opcode (no operands) to cpu
-                printf("acc: %x\n", opcode);
-            }
-            j++;
         }
      
         /*
