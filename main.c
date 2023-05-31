@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
         int j = 0;
         while(j < num_bytes) {
             //operands[0] = number of operands
-            //operands[1..num_operands] = each operand
+            //operands[1..num_operands] = bytes
             unsigned char *operands = parse(instructions, j, num_bytes);
             if(operands != NULL) {
                 for(i = 1; i <= operands[0]; i++) {
