@@ -1,6 +1,0 @@
-    1. why does cpu.o keep getting added to main dir
-    2. figure out entire isa lol
-        - opcodes first
-        - then be able to read the test rom and work through that
-    3. learn how ppu works
-    

@@ -73,14 +73,12 @@ int main(int argc, char **argv) {
             unsigned char *operands = parse(instructions, j, num_bytes);
             if(operands != NULL) {
                 for(i = 1; i <= operands[0]; i++) {
-                    printf("%x ", operands[i]);
+                    //printf("%x ", operands[i]);
                 }
-                printf("\n");
+                //printf("\n");
                 j += operands[0]; 
+                exec_instr(operands);
                 free(operands);
-            }
-            else {
-                j++;
             }
         }
      
