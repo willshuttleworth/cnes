@@ -3,8 +3,10 @@
 #include <sys/stat.h> //fstat
 
 #include "parser.h"
-#include "cpu/cpu.h"
-#include "ppu/ppu.h"
+#include "cpu.h"
+#include "ppu.h"
+
+#define ADDRESS_SPACE 65536 
 
 // .nes file header
 typedef struct Header {
@@ -19,11 +21,10 @@ typedef struct Header {
     char padding[5];
 }Header;
 
-void tick(unsigned int *cycle) {
-    cycle++;
-    cpu_tick_to(*cycle);
-    ppu_tick_to(*cycle);
-}
+//globals (for cpu)
+unsigned char *instructions;
+int len;
+int cpu_cycle;
 
 int main(int argc, char **argv) {
     //read rom from cmdline arg
@@ -55,10 +56,10 @@ int main(int argc, char **argv) {
 
         fstat(fileno(file), &file_stats); //better to use c library wrappers over syscalls? idk
         int num_bytes = file_stats.st_size;
-        unsigned char *instructions = malloc(num_bytes - sizeof(Header));
+        len = num_bytes - sizeof(Header);
+        instructions = malloc(len);
         
         //read all bytes of rom into an array
-        //should this be read into an array? (yes should be stored in memory and read in once from file)
         int i = 0;
         while(!feof(file)) {
             fread(&instructions[i], sizeof(char), 1, file); 
@@ -66,20 +67,32 @@ int main(int argc, char **argv) {
         } 
 
         //main execution loop. cpu will pass next pc as return val of execution instruction halt will be encoded as null/negative val
-        int j = 0;
-        while(j < num_bytes) {
+        //loop while cpu not halted/interrupted
+        //cpu has access to instruction byte array and gets next instruction independent of main
+        int main_cycle = 0;
+        cpu_cycle = 0;
+        int ret = 0;
+
+        //allocate cpu's address space in heap (16bit address space so 2^16 bytes)
+        unsigned char *mem = malloc(ADDRESS_SPACE);
+        if(mem != NULL) {
+            //pass instructions to cpu
+            cpu_setup(instructions, len, mem);
+        }
+
+        while(ret != -1) {
             //operands[0] = number of operands
             //operands[1..num_operands] = bytes
-            unsigned char *operands = parse(instructions, j, num_bytes);
-            if(operands != NULL) {
-                for(i = 1; i <= operands[0]; i++) {
-                    //printf("%x ", operands[i]);
-                }
-                //printf("\n");
-                j += operands[0]; 
-                exec_instr(operands);
-                free(operands);
+            /*
+            for(i = 1; i <= operands[0]; i++) {
+                printf("%x ", operands[i]);
             }
+            printf("\n");
+            */
+            if(cpu_cycle < main_cycle) {
+                ret = exec_instr();
+            }
+            main_cycle++;
         }
      
         /*
@@ -91,6 +104,7 @@ int main(int argc, char **argv) {
         */
         
         free(instructions);
+        free(mem);
         fclose(file);
     }
     return 0;

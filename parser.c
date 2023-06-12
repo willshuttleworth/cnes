@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 
 #define NUM_OPCODES 256
@@ -32,6 +33,10 @@ int num_bytes(unsigned char opcode) {
 //  arr[0] = num_bytes
 //  arr[1..num_bytes] = bytes
 unsigned char *parse(unsigned char *instructions, int pos, int len) {
+    if(pos >= len) {
+        puts("tried to access instruction out of range");
+        exit(0);
+    }
     unsigned char opcode = instructions[pos];
     int bytes = num_bytes(opcode);
     if(bytes == 1) {
