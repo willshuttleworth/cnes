@@ -15,8 +15,8 @@ typedef struct CPU {
     unsigned short pc;
     //needs to be 8bits and normal for testing purposes. hi byte is always 0x01 so stack address is 0x01(sp) ex: 0x01FF
     //stack pointer is decreased on pushes and increased on pops
-    //sp is pointer so it can be null, and null is empty stack
-    unsigned char *sp; 
+    //sp points to next available stack location, so it starts at 0xFF, and negative 1 means full stack
+    short sp; 
 
     //processor status:
     
@@ -40,7 +40,6 @@ typedef struct CPU {
 //cpu globals
 unsigned char *instructions;
 int len;
-extern unsigned char *sp_init_val;
 
 //stack is 0x100 to 0x1FF, next stack address is mem[STACK_TOP - stack_ptr]
 //stack grows down from STACK_TOP(0x1FF)
@@ -52,8 +51,8 @@ CPU cpu = {
             .x = 0,
             .y = 0,
             .pc = 0,
-            .sp = NULL,
-            .cf = 1,
+            .sp = 0xFF,
+            .cf = 0,
             .zf = 0,
             .id = 0,
             .dm = 0,
@@ -70,7 +69,7 @@ void cpu_setup(unsigned char *instr, int length, unsigned char *memory) {
 
 void print_cpu(int cycle) {
     printf("cycle: %d\tacc: %x\tx: %x\ty: %x\tpc: %x\tsp: %x\tcf: %d\tzf: %d\tid: %d\tdm: %d\tbrk: %d\tof: %d\tneg: %d\n",
-            cycle, cpu.acc, cpu.x, cpu.y, cpu.pc, *cpu.sp, cpu.cf, cpu.zf, cpu.id, cpu.dm, cpu.brk, cpu.of, cpu.neg);
+            cycle, cpu.acc, cpu.x, cpu.y, cpu.pc, cpu.sp, cpu.cf, cpu.zf, cpu.id, cpu.dm, cpu.brk, cpu.of, cpu.neg);
 }
 
 //push/pop stuff from stack
@@ -81,54 +80,87 @@ void print_cpu(int cycle) {
 //  underflow: stack pointer is negative (should only ever be -1) and a pop was called
 
 void push(unsigned char byte) {
-    //push on empty stack
-    if(cpu.sp == NULL) {
-        mem[STACK_TOP] = byte;
-        cpu.sp = sp_init_val;
-        return;
-    }
     //overflow
-    if(*cpu.sp == 0) {
+    if(cpu.sp < 0) {
         puts("stack overflow");
         return;
     }
 
-    for(unsigned short i = *cpu.sp; i <= 0xFF; i++) {
-        mem[0x100 + i] = mem[0x100 + i + 1];
+    for(unsigned short i = cpu.sp; i <= 0xFF; i++) {
+        mem[0x100 + i - 1] = mem[0x100 + i];
     }
     mem[STACK_TOP] = byte;
-    *cpu.sp -= 1;
+    cpu.sp -= 1;
 }
 
 unsigned char pop() {
-    if(cpu.sp == NULL) {
+    if(cpu.sp == 0xFF) {
         puts("stack underflow"); 
         exit(0); //is there a sentinel value that could be returned instead of crashing?
     }
 
     //save mem[STACK_TOP], move everything else up an address
     unsigned char popped = mem[STACK_TOP];
-    for(short i = 0xFF; i >= *cpu.sp; i--) {
+    for(short i = 0xFF; i > cpu.sp; i--) {
         mem[0x100 + i + 1] = mem[0x100 + i];
     }
-    if(*cpu.sp == 0xFF) {
-        cpu.sp = NULL;
-        return popped;
-    }
-    *cpu.sp += 1;
+    cpu.sp += 1;
     return popped;
 }
 
 void print_stack() {
-    if(cpu.sp == NULL) {
+    if(cpu.sp == 0xFF) {
         puts("stack is empty");
         return;
     }
     printf("stack: ");
-    for(short i = 0xFF; i >= *cpu.sp; i--) {
+    for(short i = 0xFF; i > cpu.sp; i--) {
         printf("%x ", mem[0x100 + i]);
     }
     printf("\n");
+}
+
+//encode all status registers as single byte
+unsigned char encode_status() {
+    unsigned char status = 0;
+    if(cpu.neg == 1) {
+        status |= 1;
+    }
+    status <<= 1;
+   
+    if(cpu.of == 1) {
+        status |= 1;
+    }
+    status <<= 1; 
+    //bit 5 is always 1 when pushed onto stack
+    status |= 1;
+    status <<= 1; 
+    
+    if(cpu.brk == 1) {
+        status |= 1;
+    }
+    status <<= 1; 
+
+    if(cpu.dm == 1) {
+        status |= 1;
+    }
+    status <<= 1; 
+    
+    if(cpu.id == 1) {
+        status |= 1;
+    }
+    status <<= 1; 
+    
+    if(cpu.zf == 1) {
+        status |= 1;
+    }
+    status <<= 1; 
+    
+    if(cpu.cf == 1) {
+        status |= 1;
+    }
+
+    return status;
 }
 
 //stack tests:
@@ -139,6 +171,7 @@ void print_stack() {
 //  - pop all 
 //  - underflow
 void stack_test() {
+    /*
     print_stack(); //stack should start off empty
     push(0);
     print_stack(); //should contain one zero
@@ -153,12 +186,17 @@ void stack_test() {
         print_stack();
     }
     pop(); //should underflow
+    */
+    print_cpu(cpu_cycle);
+    cpu.zf = 1;
+    cpu.dm = 1;
+    cpu.neg = 1;
+    printf("%x\n", encode_status());
 }
 
 // parse out each opcode individually(except for repeats like jams, nops that take same num of cycles, etc)
 int exec_instr() {
     unsigned char *operands = parse(instructions, cpu.pc, len);
-    //CLC: set carry flag to zero
     //two cycles
     if(operands == NULL) {
         puts("parse error: parse returned null");
@@ -175,15 +213,21 @@ int exec_instr() {
         cpu.pc += 2;
         cpu.brk = 1;
         //push status reg, pc lo byte, pc hi byte onto stack (in that order)
+        //have to encode sr gahhhhhhh
+        //will write function that encodes all individual statuses to one byte
+        //push(cpu.sr);
+        push((unsigned char)cpu.pc); 
+        push((unsigned char)(cpu.pc >> 8)); 
         //set hi pc to val at 0xFFFF, lo pc to val at 0xFFFE (which is lo/hi of pc?)
         //what is at these memory addresses? when do they get loaded?
+        cpu.pc = mem[0xFFFFFFFE];
         cpu_cycle += 7;
-        
+        cpu.brk = 0; 
         free(operands);
         return 0;
     }
 
-    //CLC: clear carry bit
+    //CLC: set carry flag to zero
     else if(operands[1] == 0x18) {
         cpu.cf = 0;
         cpu_cycle += 2;
