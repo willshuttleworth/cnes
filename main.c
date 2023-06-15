@@ -25,6 +25,8 @@ typedef struct Header {
 unsigned char *instructions;
 int len;
 int cpu_cycle;
+unsigned char sp = 0xFF;
+unsigned char *sp_init_val = &sp; 
 
 int main(int argc, char **argv) {
     //read rom from cmdline arg
@@ -79,7 +81,10 @@ int main(int argc, char **argv) {
             //pass instructions to cpu
             cpu_setup(instructions, len, mem);
         }
+        
+        stack_test(); 
 
+        exit(0); //remove when stack testing done
         while(ret != -1) {
             //operands[0] = number of operands
             //operands[1..num_operands] = bytes
@@ -87,7 +92,6 @@ int main(int argc, char **argv) {
             for(i = 1; i <= operands[0]; i++) {
                 printf("%x ", operands[i]);
             }
-            printf("\n");
             */
             if(cpu_cycle < main_cycle) {
                 ret = exec_instr();
