@@ -6,7 +6,8 @@
 #include "cpu.h"
 #include "ppu.h"
 
-#define ADDRESS_SPACE 65536 
+#define ADDRESS_SPACE 65536 //2^16
+#define ROM_SIZE 16384      //2^14
 
 // .nes file header
 typedef struct Header {
@@ -45,7 +46,6 @@ int main(int argc, char **argv) {
         if((h.flags6 >> 2) | 0) {
             fseek(file, 512, SEEK_CUR);
         }
-        //unsigned int cycle = 0;
 
         //seek to end and find size of rom (dont include header yeah?) and allocate array big enough
         struct stat file_stats;
@@ -66,6 +66,27 @@ int main(int argc, char **argv) {
             i++;
         } 
 
+        //allocate cpu's address space in heap (16bit address space so 2^16 bytes)
+        unsigned char *mem = malloc(ADDRESS_SPACE);
+        if(mem != NULL) {
+            if(h.chr_rom_size == 2) {
+                puts("prg_rom_size is 2. time to account for that dumbass");
+                exit(0);
+            }
+            //load prg_rom into correct spot in mem
+            //if h.prg_rom_size is one, mirror, if its 2, dont mirror, else just quit
+            //mem[0xC000..0x10000] is where instructions go, then also copy it to 0x8000..0xBFFF
+            for(int i = 0; i < ROM_SIZE; i++) {
+                mem[0x8000 + i] = instructions[i];
+                mem[0xC000 + i] = instructions[i];
+            }
+            //initialize interupt vector
+            mem[0xFFFC] = 0x00;
+            mem[0xFFFD] = 0xC0;
+            //pass instructions to cpu
+            cpu_setup(instructions, len, mem);
+        }
+
         //main execution loop. cpu will pass next pc as return val of execution instruction halt will be encoded as null/negative val
         //loop while cpu not halted/interrupted
         //cpu has access to instruction byte array and gets next instruction independent of main
@@ -73,12 +94,6 @@ int main(int argc, char **argv) {
         cpu_cycle = 0;
         int ret = 0;
 
-        //allocate cpu's address space in heap (16bit address space so 2^16 bytes)
-        unsigned char *mem = malloc(ADDRESS_SPACE);
-        if(mem != NULL) {
-            //pass instructions to cpu
-            cpu_setup(instructions, len, mem);
-        }
         
         //main execution loop
         while(ret != -1) {

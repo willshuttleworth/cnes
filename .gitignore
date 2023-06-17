@@ -3,3 +3,5 @@
 *.dSYM
 main
 hex
+test/donkeykong.nes
+!todo.txt

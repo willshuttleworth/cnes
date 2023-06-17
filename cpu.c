@@ -67,9 +67,9 @@ void cpu_setup(unsigned char *instr, int length, unsigned char *memory) {
     mem = memory;
 }
 
-void print_cpu(int cycle) {
+void print_cpu() {
     printf("cycle: %d\tacc: %x\tx: %x\ty: %x\tpc: %x\tsp: %x\tcf: %d\tzf: %d\tid: %d\tdm: %d\tbrk: %d\tof: %d\tneg: %d\n",
-            cycle, cpu.acc, cpu.x, cpu.y, cpu.pc, cpu.sp, cpu.cf, cpu.zf, cpu.id, cpu.dm, cpu.brk, cpu.of, cpu.neg);
+            cpu_cycle, cpu.acc, cpu.x, cpu.y, cpu.pc, cpu.sp, cpu.cf, cpu.zf, cpu.id, cpu.dm, cpu.brk, cpu.of, cpu.neg);
 }
 
 //push/pop stuff from stack
@@ -171,7 +171,6 @@ unsigned char encode_status() {
 //  - pop all 
 //  - underflow
 void stack_test() {
-    /*
     print_stack(); //stack should start off empty
     push(0);
     print_stack(); //should contain one zero
@@ -186,12 +185,6 @@ void stack_test() {
         print_stack();
     }
     pop(); //should underflow
-    */
-    print_cpu(cpu_cycle);
-    cpu.zf = 1;
-    cpu.dm = 1;
-    cpu.neg = 1;
-    printf("%x\n", encode_status());
 }
 
 // parse out each opcode individually(except for repeats like jams, nops that take same num of cycles, etc)
