@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "parser.h"
+#include "../parser/parser.h"
 
 #define STACK_TOP 0x1FF
 
@@ -37,10 +37,6 @@ typedef struct CPU {
 
 }CPU;
 
-//cpu globals
-unsigned char *instructions;
-int len;
-
 //stack is 0x100 to 0x1FF, next stack address is mem[STACK_TOP - stack_ptr]
 //stack grows down from STACK_TOP(0x1FF)
 unsigned char *mem;
@@ -50,7 +46,7 @@ CPU cpu = {
             .acc = 0,
             .x = 0,
             .y = 0,
-            .pc = 0,
+            .pc = 0xC000,
             .sp = 0xFF,
             .cf = 0,
             .zf = 0,
@@ -61,63 +57,10 @@ CPU cpu = {
             .neg = 0,
 };
 
-void cpu_setup(unsigned char *instr, int length, unsigned char *memory) {
-    instructions = instr;
-    len = length;
+void cpu_setup(unsigned char *instr, unsigned char *memory, int size) {
     mem = memory;
-}
-
-void print_cpu() {
-    printf("cycle: %d\tacc: %x\tx: %x\ty: %x\tpc: %x\tsp: %x\tcf: %d\tzf: %d\tid: %d\tdm: %d\tbrk: %d\tof: %d\tneg: %d\n",
-            cpu_cycle, cpu.acc, cpu.x, cpu.y, cpu.pc, cpu.sp, cpu.cf, cpu.zf, cpu.id, cpu.dm, cpu.brk, cpu.of, cpu.neg);
-}
-
-//push/pop stuff from stack
-//stack pointer points to last occupied stack pos
-//push: move everything from STACK_TOP to stack_pointer down one address, put new value at mem[STACK_TOP]
-//  overflow: if stack pointer is already 255, then another push would overflow (is overflow an error that is ignored on 6502?)
-//pop: save mem[STACK_TOP], move everything from STACK_TOP-1 to stack_pointer up one address, return saved value
-//  underflow: stack pointer is negative (should only ever be -1) and a pop was called
-
-void push(unsigned char byte) {
-    //overflow
-    if(cpu.sp < 0) {
-        puts("stack overflow");
-        return;
-    }
-
-    for(unsigned short i = cpu.sp; i <= 0xFF; i++) {
-        mem[0x100 + i - 1] = mem[0x100 + i];
-    }
-    mem[STACK_TOP] = byte;
-    cpu.sp -= 1;
-}
-
-unsigned char pop() {
-    if(cpu.sp == 0xFF) {
-        puts("stack underflow"); 
-        exit(0); //is there a sentinel value that could be returned instead of crashing?
-    }
-
-    //save mem[STACK_TOP], move everything else up an address
-    unsigned char popped = mem[STACK_TOP];
-    for(short i = 0xFF; i > cpu.sp; i--) {
-        mem[0x100 + i + 1] = mem[0x100 + i];
-    }
-    cpu.sp += 1;
-    return popped;
-}
-
-void print_stack() {
-    if(cpu.sp == 0xFF) {
-        puts("stack is empty");
-        return;
-    }
-    printf("stack: ");
-    for(short i = 0xFF; i > cpu.sp; i--) {
-        printf("%x ", mem[0x100 + i]);
-    }
-    printf("\n");
+    //load instructions into correct spot in memory
+    load(instr, mem, size);
 }
 
 //encode all status registers as single byte
@@ -163,6 +106,69 @@ unsigned char encode_status() {
     return status;
 }
 
+//print cpu state
+void print_cpu(unsigned short old_pc, unsigned char *args, int len) {
+    printf("%X  ", old_pc);
+    for(int i = 0; i < len; i++) {
+        printf("%X ", args[i]);
+    }
+    if(len == 1) {
+        printf("\t\t");
+    }
+    else {
+        printf("\t");
+    }
+    printf("A:%02X X:%02X Y:%02X P:%02X SP:%X CYC:%d\n", cpu.acc, cpu.x, cpu.y, encode_status(), cpu.sp, cpu_cycle);
+}
+
+//push/pop stuff from stack
+//stack pointer points to last occupied stack pos
+//push: move everything from STACK_TOP to stack_pointer down one address, put new value at mem[STACK_TOP]
+//  overflow: if stack pointer is already 255, then another push would overflow (is overflow an error that is ignored on 6502?)
+//pop: save mem[STACK_TOP], move everything from STACK_TOP-1 to stack_pointer up one address, return saved value
+//  underflow: stack pointer is negative (should only ever be -1) and a pop was called
+void push(unsigned char byte) {
+    //overflow
+    if(cpu.sp < 0) {
+        puts("stack overflow");
+        return;
+    }
+
+    for(unsigned short i = cpu.sp; i <= 0xFF; i++) {
+        mem[0x100 + i - 1] = mem[0x100 + i];
+    }
+    mem[STACK_TOP] = byte;
+    cpu.sp -= 1;
+}
+
+unsigned char pop() {
+    if(cpu.sp == 0xFF) {
+        puts("stack underflow"); 
+        exit(0); //is there a sentinel value that could be returned instead of crashing?
+    }
+
+    //save mem[STACK_TOP], move everything else up an address
+    unsigned char popped = mem[STACK_TOP];
+    for(short i = 0xFF; i > cpu.sp; i--) {
+        mem[0x100 + i + 1] = mem[0x100 + i];
+    }
+    cpu.sp += 1;
+    return popped;
+}
+
+void print_stack() {
+    if(cpu.sp == 0xFF) {
+        puts("stack is empty");
+        return;
+    }
+    printf("stack: ");
+    for(short i = 0xFF; i > cpu.sp; i--) {
+        printf("%x ", mem[0x100 + i]);
+    }
+    printf("\n");
+}
+
+
 //stack tests:
 //  - add one to empty stack
 //  - pop one
@@ -189,20 +195,14 @@ void stack_test() {
 
 // parse out each opcode individually(except for repeats like jams, nops that take same num of cycles, etc)
 int exec_instr() {
-    unsigned char *operands = parse(instructions, cpu.pc, len);
-    //two cycles
-    if(operands == NULL) {
-        puts("parse error: parse returned null");
-        free(operands);
-        free(mem);
-        
-        //return some error to main? then main can cleanup everything and dont have to free instructions and mem in two different places?
-        exit(0);
-    }
+    unsigned char opcode = mem[cpu.pc];
 
     //brk
-    else if(operands[1] == 0x00) {
+    if(opcode == 0x00) {
         //technically a 2 byte instruction, so next pc is pc+2
+        unsigned char args[1] = {mem[cpu.pc]};
+        unsigned short old_pc = cpu.pc;
+
         cpu.pc += 2;
         cpu.brk = 1;
         //push status reg, pc lo byte, pc hi byte onto stack (in that order)
@@ -213,23 +213,40 @@ int exec_instr() {
         push((unsigned char)(cpu.pc >> 8)); 
         //set hi pc to val at 0xFFFF, lo pc to val at 0xFFFE (which is lo/hi of pc?)
         //what is at these memory addresses? when do they get loaded?
-        cpu.pc = mem[0xFFFFFFFE];
+        cpu.pc = mem[0xFFFF];
+        cpu.pc <<= 8;
+        cpu.pc |= mem[0xFFFE];
         cpu_cycle += 7;
         cpu.brk = 0; 
-        free(operands);
+
+        print_cpu(old_pc, args, 1);
         return 0;
     }
 
     //CLC: set carry flag to zero
-    else if(operands[1] == 0x18) {
+    else if(opcode == 0x18) {
+        unsigned char args[1] = {mem[cpu.pc]};
+        unsigned short old_pc = cpu.pc;
         cpu.cf = 0;
         cpu_cycle += 2;
         cpu.pc += 1;
 
-        free(operands);
+        print_cpu(old_pc, args, 1);
         return 0;
     }
-    free(operands);
-    cpu.pc += 1;
+    
+    //JMP abs: jump to absolute address
+    else if(opcode == 0x4C) {
+        unsigned char args[3] = {mem[cpu.pc], mem[cpu.pc+1], mem[cpu.pc+2]};
+        unsigned short old_pc = cpu.pc;
+        //set next pc to address
+        cpu.pc = mem[old_pc + 2];
+        cpu.pc <<= 8;
+        cpu.pc |= mem[old_pc + 1];
+        cpu_cycle += 3;
+        print_cpu(old_pc, args, 3);
+        return 0;
+    }
+    cpu.pc += 1; 
     return 0;
 }

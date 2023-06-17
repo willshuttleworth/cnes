@@ -2,29 +2,14 @@
 #include <stdlib.h>
 #include <sys/stat.h> //fstat
 
-#include "parser.h"
-#include "cpu.h"
-#include "ppu.h"
+#include "parser/parser.h"
+#include "cpu/cpu.h"
+#include "ppu/ppu.h"
 
 #define ADDRESS_SPACE 65536 //2^16
-#define ROM_SIZE 16384      //2^14
 
-// .nes file header
-typedef struct Header {
-    char magic_num[4]; 
-    char prg_rom_size; //16kb units
-    char chr_rom_size; //8kb units
-    char flags6;
-    char flags7;
-    char flags8;
-    char flags9;
-    char flags10;
-    char padding[5];
-}Header;
 
 //globals (for cpu)
-unsigned char *instructions;
-int len;
 int cpu_cycle;
 
 int main(int argc, char **argv) {
@@ -39,53 +24,14 @@ int main(int argc, char **argv) {
             printf("invalid file\n");
             exit(0);
         }
+
+        //find number of 16kib blocks
+        int num_blocks = parse_blocks(file);
         //read each instruction into an array
-        Header h;
-        fread(&h, sizeof(Header), 1, file);
-        //checking if trainer is present
-        if((h.flags6 >> 2) | 0) {
-            fseek(file, 512, SEEK_CUR);
-        }
-
-        //seek to end and find size of rom (dont include header yeah?) and allocate array big enough
-        struct stat file_stats;
-        file_stats.st_uid = 0;
-        file_stats.st_gid = 0;
-        file_stats.st_size = 0;
-        file_stats.st_mode = 0;
-
-        fstat(fileno(file), &file_stats); //better to use c library wrappers over syscalls? idk
-        int num_bytes = file_stats.st_size;
-        len = num_bytes - sizeof(Header);
-        instructions = malloc(len);
-        
-        //read all bytes of rom into an array
-        int i = 0;
-        while(!feof(file)) {
-            fread(&instructions[i], sizeof(char), 1, file); 
-            i++;
-        } 
-
-        //allocate cpu's address space in heap (16bit address space so 2^16 bytes)
+        unsigned char *instructions = parse_instructions(file);
         unsigned char *mem = malloc(ADDRESS_SPACE);
-        if(mem != NULL) {
-            if(h.chr_rom_size == 2) {
-                puts("prg_rom_size is 2. time to account for that dumbass");
-                exit(0);
-            }
-            //load prg_rom into correct spot in mem
-            //if h.prg_rom_size is one, mirror, if its 2, dont mirror, else just quit
-            //mem[0xC000..0x10000] is where instructions go, then also copy it to 0x8000..0xBFFF
-            for(int i = 0; i < ROM_SIZE; i++) {
-                mem[0x8000 + i] = instructions[i];
-                mem[0xC000 + i] = instructions[i];
-            }
-            //initialize interupt vector
-            mem[0xFFFC] = 0x00;
-            mem[0xFFFD] = 0xC0;
-            //pass instructions to cpu
-            cpu_setup(instructions, len, mem);
-        }
+        //pass rom info to cpu
+        cpu_setup(instructions, mem, num_blocks);
 
         //main execution loop. cpu will pass next pc as return val of execution instruction halt will be encoded as null/negative val
         //loop while cpu not halted/interrupted
@@ -94,8 +40,7 @@ int main(int argc, char **argv) {
         cpu_cycle = 0;
         int ret = 0;
 
-        
-        //main execution loop
+        //run 7 cycle startup instruction first (add a specific cpu function for that)
         while(ret != -1) {
             //operands[0] = number of operands
             //operands[1..num_operands] = bytes

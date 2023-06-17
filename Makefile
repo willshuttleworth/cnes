@@ -1,11 +1,32 @@
-main: main.c cpu.o ppu.o parser.o
-	gcc -Wall -g -o main main.c cpu.o ppu.o parser.o
+TARGET = main
 
-cpu.o: cpu.c cpu.h
-	gcc -Wall -c -g cpu.c
+CC = gcc
+CFLAGS = -Wall -g
 
-ppu.o: ppu.c ppu.h
-	gcc -Wall -c -g ppu.c
+OUTDIR = .
+DATADIR = ./data
+SUBDIR = cpu ppu parser
+DIR_OBJ = ./obj
 
-parser.o: parser.c
-	gcc -Wall -g -c parser.c
+INCS = $(wildcard *.h $(foreach fd, $(SUBDIR), $(fd)/*.h))
+SRCS = $(wildcard *.c $(foreach fd, $(SUBDIR), $(fd)/*.c))
+NODIR_SRC = $(notdir $(SRCS))
+OBJS = $(addprefix $(DIR_OBJ)/, $(SRCS:c=o)) # obj/xxx.o obj/folder/xxx .o
+INC_DIRS = $(addprefix -I, $(SUBDIR))
+
+.PHONY: clean echoes
+
+$(TARGET): $(OBJS)
+	$(CC) -o $(OUTDIR)/$@ $(OBJS)
+
+$(DIR_OBJ)/%.o: %.c $(INCS)
+	mkdir -p $(@D)
+	$(CC) -o $@ -c $< $(CFLAGS) $(INC_DIRS)
+
+clean:
+	rm -rf $(DIR_OBJ)/*
+
+echoes:
+	@echo "INC files: $(INCS)"  
+	@echo "SRC files: $(SRCS)"
+	@echo "OBJ files: $(OBJS)"

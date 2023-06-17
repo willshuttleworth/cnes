@@ -1,2 +1,3 @@
-parser is useless rn. read opcode, then take bytes from memory as needed (mem[pc+1] for example)
-use parser to simplify main: it will read file header, put prg_rom into memory, put 0xC000 in 0xFFFC (little endian so 00 C0) and pass all of this to cpu. main just calls parse to initialize cpu
+implement cpu function for startup process (7 cycles, loading interrupt vector, etc.)
+
+remove cpu.pc += 1 at bottom of exec_instr()
