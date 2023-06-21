@@ -1,3 +1,1 @@
-implement cpu function for startup process (7 cycles, loading interrupt vector, etc.)
-
-remove cpu.pc += 1 at bottom of exec_instr()
+group opcodes better, comment out sections better

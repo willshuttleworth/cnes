@@ -46,22 +46,16 @@ CPU cpu = {
             .acc = 0,
             .x = 0,
             .y = 0,
-            .pc = 0xC000,
+            .pc = 0,
             .sp = 0xFF,
             .cf = 0,
             .zf = 0,
             .id = 0,
-            .dm = 0,
+            .dm = 1,
             .brk = 0,
             .of = 0,
             .neg = 0,
 };
-
-void cpu_setup(unsigned char *instr, unsigned char *memory, int size) {
-    mem = memory;
-    //load instructions into correct spot in memory
-    load(instr, mem, size);
-}
 
 //encode all status registers as single byte
 unsigned char encode_status() {
@@ -83,13 +77,13 @@ unsigned char encode_status() {
         status |= 1;
     }
     status <<= 1; 
-
-    if(cpu.dm == 1) {
+    
+    if(cpu.id == 1) {
         status |= 1;
     }
     status <<= 1; 
-    
-    if(cpu.id == 1) {
+
+    if(cpu.dm == 1) {
         status |= 1;
     }
     status <<= 1; 
@@ -107,16 +101,19 @@ unsigned char encode_status() {
 }
 
 //print cpu state
-void print_cpu(unsigned short old_pc, unsigned char *args, int len) {
-    printf("%X  ", old_pc);
+void print_cpu(unsigned char *args, int len) {
+    printf("%X  ", cpu.pc);
     for(int i = 0; i < len; i++) {
-        printf("%X ", args[i]);
+        printf("%02X ", args[i]);
     }
-    if(len == 1) {
-        printf("\t\t");
+    if(len == 3) {
+        printf(" ");
+    }
+    else if(len == 2){
+        printf("    ");
     }
     else {
-        printf("\t");
+        printf("       ");
     }
     printf("A:%02X X:%02X Y:%02X P:%02X SP:%X CYC:%d\n", cpu.acc, cpu.x, cpu.y, encode_status(), cpu.sp, cpu_cycle);
 }
@@ -141,6 +138,13 @@ void push(unsigned char byte) {
     cpu.sp -= 1;
 }
 
+//just calls push twice but does shifts and ordering
+void push_word(short word) {
+    //push hi then lo 
+    push((unsigned char) (word >> 8));
+    push((unsigned char) word);
+}
+
 unsigned char pop() {
     if(cpu.sp == 0xFF) {
         puts("stack underflow"); 
@@ -156,6 +160,14 @@ unsigned char pop() {
     return popped;
 }
 
+short pop_word() {
+    unsigned char lo = pop();
+    unsigned char hi = pop();
+    short word = hi;
+    word <<= 8;
+    word |= lo;
+    return word;
+}
 void print_stack() {
     if(cpu.sp == 0xFF) {
         puts("stack is empty");
@@ -190,7 +202,25 @@ void stack_test() {
         pop();
         print_stack();
     }
-    pop(); //should underflow
+    //pop(); //should underflow
+    push_word(0x1234);
+    print_stack();
+    printf("%x\n", pop_word());
+    print_stack();
+}
+
+void cpu_setup(unsigned char *instr, unsigned char *memory, int size) {
+    mem = memory;
+    //load instructions into correct spot in memory
+    load(instr, mem, size);
+
+    push(0);
+    push(0);
+    //take 7 cycles to set pc to value in mem[0xFFFC/D]
+    cpu.pc = mem[0xFFFD];     
+    cpu.pc <<= 8;
+    cpu.pc |= mem[0xFFFC];
+    cpu_cycle = 7;
 }
 
 // parse out each opcode individually(except for repeats like jams, nops that take same num of cycles, etc)
@@ -201,7 +231,7 @@ int exec_instr() {
     if(opcode == 0x00) {
         //technically a 2 byte instruction, so next pc is pc+2
         unsigned char args[1] = {mem[cpu.pc]};
-        unsigned short old_pc = cpu.pc;
+        print_cpu(args, 1);
 
         cpu.pc += 2;
         cpu.brk = 1;
@@ -219,34 +249,100 @@ int exec_instr() {
         cpu_cycle += 7;
         cpu.brk = 0; 
 
-        print_cpu(old_pc, args, 1);
         return 0;
     }
 
-    //CLC: set carry flag to zero
+    /*
+     *
+     * -------------------------- IMPLs -------------------------- 
+     *
+     */
+
+    //CLC impl: set carry flag to zero
     else if(opcode == 0x18) {
         unsigned char args[1] = {mem[cpu.pc]};
-        unsigned short old_pc = cpu.pc;
+        print_cpu(args, 1);
         cpu.cf = 0;
         cpu_cycle += 2;
         cpu.pc += 1;
 
-        print_cpu(old_pc, args, 1);
+        return 0;
+    }
+
+    //SEC impl: set carry flag
+    else if(opcode == 0x38) {
+        unsigned char args[1] = {mem[cpu.pc]};
+        print_cpu(args, 1);
+        cpu.cf = 1;
+        cpu_cycle += 2;
+        cpu.pc += 1;
+
+        return 0;
+    }
+    
+    //NOP
+    else if(opcode == 0xEA) {
+        unsigned char args[1] = {mem[cpu.pc]};
+        print_cpu(args, 1);
+        cpu_cycle += 2;
+        cpu.pc += 1;
+        
         return 0;
     }
     
     //JMP abs: jump to absolute address
     else if(opcode == 0x4C) {
         unsigned char args[3] = {mem[cpu.pc], mem[cpu.pc+1], mem[cpu.pc+2]};
+        print_cpu(args, 3);
         unsigned short old_pc = cpu.pc;
         //set next pc to address
         cpu.pc = mem[old_pc + 2];
         cpu.pc <<= 8;
         cpu.pc |= mem[old_pc + 1];
         cpu_cycle += 3;
-        print_cpu(old_pc, args, 3);
         return 0;
     }
+    //LDX imm: load register x with imm
+    else if(opcode == 0xA2) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+        //load x with imm value
+        cpu.x = mem[cpu.pc+1];
+        //set flags
+        if(cpu.x == 0) {
+            cpu.zf = 1;
+        } 
+        cpu.neg = cpu.x >> 7;
+
+        cpu.pc += 2;
+        cpu_cycle +=2; 
+        return 0;
+    }
+    //STX zpg: store value in register x at zeropage address
+    else if(opcode == 0x86) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+        unsigned char addr = mem[cpu.pc+1];
+        //store x 
+        mem[addr] = cpu.x;
+        cpu.pc += 2;
+        cpu_cycle += 3;
+        return 0;
+    }
+    
+    //JSR abs: jump to abs address, save current pc
+    else if(opcode == 0x20) {
+        unsigned char args[3] = {mem[cpu.pc], mem[cpu.pc+1], mem[cpu.pc+2]};
+        print_cpu(args, 3);
+        //push current pc to stack
+        push_word(cpu.sp); 
+        //set pc to abs 
+        cpu.pc = args[2] << 8;
+        cpu.pc |= args[1];
+        cpu_cycle += 6;
+        return 0;
+    }
+
     cpu.pc += 1; 
     return 0;
 }

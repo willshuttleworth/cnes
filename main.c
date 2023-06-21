@@ -37,7 +37,6 @@ int main(int argc, char **argv) {
         //loop while cpu not halted/interrupted
         //cpu has access to instruction byte array and gets next instruction independent of main
         int main_cycle = 0;
-        cpu_cycle = 0;
         int ret = 0;
 
         //run 7 cycle startup instruction first (add a specific cpu function for that)
