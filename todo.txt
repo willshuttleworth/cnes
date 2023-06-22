@@ -1,1 +1,3 @@
-group opcodes better, comment out sections better
+do any already implemented opcodes take extra cycles due to page stuff?
+
+how does a program end?

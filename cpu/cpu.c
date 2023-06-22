@@ -3,6 +3,7 @@
 #include "../parser/parser.h"
 
 #define STACK_TOP 0x1FF
+#define PAGE_SIZE 256
 
 typedef struct CPU {
     //accumulator
@@ -115,7 +116,20 @@ void print_cpu(unsigned char *args, int len) {
     else {
         printf("       ");
     }
-    printf("A:%02X X:%02X Y:%02X P:%02X SP:%X CYC:%d\n", cpu.acc, cpu.x, cpu.y, encode_status(), cpu.sp, cpu_cycle);
+    printf("A:%02X X:%02X Y:%02U P:%02X SP:%X CYC:%d\n", (unsigned char) cpu.acc, cpu.x, cpu.y, encode_status(), cpu.sp, cpu_cycle);
+}
+
+//are addresses on same page?
+int same_page(short address1, short address2) {
+    int page1 = address1 / PAGE_SIZE;
+    int page2 = address2 / PAGE_SIZE;
+    
+    if(page1 == page2) {
+        return 1;
+    } 
+    else {
+        return 0;
+    }
 }
 
 //push/pop stuff from stack
@@ -226,6 +240,11 @@ void cpu_setup(unsigned char *instr, unsigned char *memory, int size) {
 // parse out each opcode individually(except for repeats like jams, nops that take same num of cycles, etc)
 int exec_instr() {
     unsigned char opcode = mem[cpu.pc];
+    /*
+     *
+     * -------------------------- IMPLs -------------------------- 
+     *
+     */
 
     //brk
     if(opcode == 0x00) {
@@ -251,12 +270,6 @@ int exec_instr() {
 
         return 0;
     }
-
-    /*
-     *
-     * -------------------------- IMPLs -------------------------- 
-     *
-     */
 
     //CLC impl: set carry flag to zero
     else if(opcode == 0x18) {
@@ -290,6 +303,58 @@ int exec_instr() {
         return 0;
     }
     
+    /*
+     *
+     * -------------------------- IMM -------------------------- 
+     *
+     */
+
+    //LDX imm: load register x with imm
+    else if(opcode == 0xA2) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+        //load x with imm value
+        cpu.x = mem[cpu.pc+1];
+        //set flags
+        if(cpu.x == 0) {
+            cpu.zf = 1;
+        } 
+        else {
+            cpu.zf = 0;
+        }
+        cpu.neg = cpu.x >> 7;
+
+        cpu.pc += 2;
+        cpu_cycle +=2; 
+        return 0;
+    }
+
+    //LDA imm: load register acc with imm
+    else if(opcode == 0xA9) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+        //load a with imm value
+        cpu.acc = mem[cpu.pc+1];
+        //set flags
+        if(cpu.acc == 0) {
+            cpu.zf = 1;
+        } 
+        else {
+            cpu.zf = 0;
+        }
+        cpu.neg = (unsigned char) cpu.acc >> 7;
+
+        cpu.pc += 2;
+        cpu_cycle +=2; 
+        return 0;
+    }
+
+    /*
+     *
+     * -------------------------- ABS -------------------------- 
+     *
+     */
+
     //JMP abs: jump to absolute address
     else if(opcode == 0x4C) {
         unsigned char args[3] = {mem[cpu.pc], mem[cpu.pc+1], mem[cpu.pc+2]};
@@ -302,22 +367,124 @@ int exec_instr() {
         cpu_cycle += 3;
         return 0;
     }
-    //LDX imm: load register x with imm
-    else if(opcode == 0xA2) {
-        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
-        print_cpu(args, 2);
-        //load x with imm value
-        cpu.x = mem[cpu.pc+1];
-        //set flags
-        if(cpu.x == 0) {
-            cpu.zf = 1;
-        } 
-        cpu.neg = cpu.x >> 7;
 
-        cpu.pc += 2;
-        cpu_cycle +=2; 
+    //JSR abs: jump to abs address, save current pc
+    else if(opcode == 0x20) {
+        unsigned char args[3] = {mem[cpu.pc], mem[cpu.pc+1], mem[cpu.pc+2]};
+        print_cpu(args, 3);
+        //push current pc to stack
+        push_word(cpu.sp); 
+        //set pc to abs 
+        cpu.pc = args[2] << 8;
+        cpu.pc |= args[1];
+        cpu_cycle += 6;
         return 0;
     }
+
+    /*
+     *
+     * -------------------------- REL -------------------------- 
+     *
+     */
+
+    //BCS rel: branch if carry bit is set
+    else if(opcode == 0xB0) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+
+        if(cpu.cf == 1) {
+            cpu.pc += mem[cpu.pc+1];
+            //3 or 4 cycles depending on page boundary
+            if(same_page(cpu.pc, cpu.pc + mem[cpu.pc+1])) {
+                cpu_cycle += 3;
+            }
+            else {
+                cpu_cycle += 4;
+            }
+        }
+        //not branching
+        else {
+            cpu_cycle += 2;
+        }
+        cpu.pc += 2;
+        return 0;
+    }
+
+    //BCC rel: branch if carry bit is cleared
+    else if(opcode == 0x90) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+
+        if(cpu.cf == 0) {
+            cpu.pc += mem[cpu.pc+1];
+            //3 or 4 cycles depending on page boundary
+            if(same_page(cpu.pc, cpu.pc + mem[cpu.pc+1])) {
+                cpu_cycle += 3;
+            }
+            else {
+                cpu_cycle += 4;
+            }
+        }
+        //not branching
+        else {
+            cpu_cycle += 2;
+        }
+        cpu.pc += 2;
+        return 0;
+    }
+
+    //BEQ rel: branch if zero flag is set
+    else if(opcode == 0xF0) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+
+        if(cpu.zf == 1) {
+            cpu.pc += mem[cpu.pc+1];
+            //3 or 4 cycles depending on page boundary
+            if(same_page(cpu.pc, cpu.pc + mem[cpu.pc+1])) {
+                cpu_cycle += 3;
+            }
+            else {
+                cpu_cycle += 4;
+            }
+        }
+        //not branching
+        else {
+            cpu_cycle += 2;
+        }
+        cpu.pc += 2;
+        return 0;
+    }
+    
+    //BNE rel: branch if zero flag is clear
+    else if(opcode == 0xD0) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+
+        if(cpu.zf == 0) {
+            cpu.pc += mem[cpu.pc+1];
+            //3 or 4 cycles depending on page boundary
+            if(same_page(cpu.pc, cpu.pc + mem[cpu.pc+1])) {
+                cpu_cycle += 3;
+            }
+            else {
+                cpu_cycle += 4;
+            }
+        }
+        //not branching
+        else {
+            cpu_cycle += 2;
+        }
+        cpu.pc += 2;
+        return 0;
+    }
+
+    /*
+     *
+     * -------------------------- ZPG -------------------------- 
+     *
+     */
+
     //STX zpg: store value in register x at zeropage address
     else if(opcode == 0x86) {
         unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
@@ -329,17 +496,16 @@ int exec_instr() {
         cpu_cycle += 3;
         return 0;
     }
-    
-    //JSR abs: jump to abs address, save current pc
-    else if(opcode == 0x20) {
-        unsigned char args[3] = {mem[cpu.pc], mem[cpu.pc+1], mem[cpu.pc+2]};
-        print_cpu(args, 3);
-        //push current pc to stack
-        push_word(cpu.sp); 
-        //set pc to abs 
-        cpu.pc = args[2] << 8;
-        cpu.pc |= args[1];
-        cpu_cycle += 6;
+
+    //STA zpg: store value in register acc at zeropage address
+    else if(opcode == 0x85) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+        unsigned char addr = mem[cpu.pc+1];
+        //store acc 
+        mem[addr] = cpu.acc;
+        cpu.pc += 2;
+        cpu_cycle += 3;
         return 0;
     }
 
