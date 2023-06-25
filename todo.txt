@@ -1,3 +1,7 @@
+start with 0x48
+
 do any already implemented opcodes take extra cycles due to page stuff?
+
+write function to set zf and neg after changing value of acc
 
 how does a program end?

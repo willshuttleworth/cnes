@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/stat.h> //fstat
 
 #include "parser/parser.h"
 #include "cpu/cpu.h"

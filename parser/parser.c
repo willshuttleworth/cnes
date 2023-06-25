@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/stat.h>
+#include <sys/stat.h> //fstat
 
 #define ROM_SIZE 16384  //2^14
 

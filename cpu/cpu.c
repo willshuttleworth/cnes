@@ -51,8 +51,8 @@ CPU cpu = {
             .sp = 0xFF,
             .cf = 0,
             .zf = 0,
-            .id = 0,
-            .dm = 1,
+            .id = 1,
+            .dm = 0,
             .brk = 0,
             .of = 0,
             .neg = 0,
@@ -78,13 +78,13 @@ unsigned char encode_status() {
         status |= 1;
     }
     status <<= 1; 
-    
-    if(cpu.id == 1) {
+
+    if(cpu.dm == 1) {
         status |= 1;
     }
     status <<= 1; 
-
-    if(cpu.dm == 1) {
+    
+    if(cpu.id == 1) {
         status |= 1;
     }
     status <<= 1; 
@@ -287,9 +287,9 @@ int exec_instr() {
         unsigned char args[1] = {mem[cpu.pc]};
         print_cpu(args, 1);
         cpu.cf = 1;
+
         cpu_cycle += 2;
         cpu.pc += 1;
-
         return 0;
     }
     
@@ -299,7 +299,75 @@ int exec_instr() {
         print_cpu(args, 1);
         cpu_cycle += 2;
         cpu.pc += 1;
-        
+        return 0;
+    }
+
+    //RTS: return from subroutine
+    else if(opcode == 0x60) {
+        unsigned char args[1] = {mem[cpu.pc]};
+        print_cpu(args, 1);
+        cpu.pc = pop_word();
+        cpu_cycle += 6;
+        return 0;
+    }
+
+    //SEI: set id
+    else if(opcode == 0x78) {
+        unsigned char args[1] = {mem[cpu.pc]};
+        print_cpu(args, 1);
+        cpu.id = 1; 
+        cpu_cycle += 2;
+        cpu.pc += 1;
+        return 0;
+    }
+
+    //SED: set df
+    else if(opcode == 0xF8) {
+        unsigned char args[1] = {mem[cpu.pc]};
+        print_cpu(args, 1);
+        cpu.dm = 1; 
+        cpu_cycle += 2;
+        cpu.pc += 1;
+        return 0;
+    }
+
+    //CLD: clear df
+    else if(opcode == 0xD8) {
+        unsigned char args[1] = {mem[cpu.pc]};
+        print_cpu(args, 1);
+        cpu.dm = 0; 
+        cpu_cycle += 2;
+        cpu.pc += 1;
+        return 0;
+    }
+
+    //PHP: push status to stack
+    else if(opcode == 0x08) {
+        unsigned char args[1] = {mem[cpu.pc]};
+        print_cpu(args, 1);
+        //bits 4 and 5 are always pushed as 1s
+        push(encode_status() | 0x10);
+        cpu_cycle += 3;
+        cpu.pc += 1;
+        return 0;
+    }
+
+    //PLA: sets acc to stack value
+    else if(opcode == 0x68) {
+        unsigned char args[1] = {mem[cpu.pc]};
+        print_cpu(args, 1);
+        cpu.acc = pop();
+        //set zf
+        if(cpu.acc == 0) {
+            cpu.zf = 1;
+        }
+        else {
+            cpu.zf = 0;
+        }
+        //set neg
+        cpu.neg = cpu.acc >> 7;
+        cpu.pc += 1;
+        cpu_cycle += 4;
         return 0;
     }
     
@@ -349,6 +417,50 @@ int exec_instr() {
         return 0;
     }
 
+    //AND imm: acc = acc & imm
+    else if(opcode == 0x29) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+        //load a with imm value
+        cpu.acc &= args[1];
+        //set flags
+        if(cpu.acc == 0) {
+            cpu.zf = 1;
+        } 
+        else {
+            cpu.zf = 0;
+        }
+        cpu.neg = (unsigned char) cpu.acc >> 7;
+
+        cpu.pc += 2;
+        cpu_cycle +=2; 
+        return 0;
+    }
+
+    //CMP imm: compare acc and imm and set flags
+    else if(opcode == 0xC9) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+        //set flags
+        if(cpu.acc >= args[1]) {
+            cpu.cf = 1;
+        }
+        else {
+            cpu.cf = 0;
+        }
+        if(cpu.acc == args[1]) {
+            cpu.zf = 1;
+        } 
+        else {
+            cpu.zf = 0;
+        }
+        cpu.neg = (unsigned char) ((cpu.acc - args[1]) >> 7);
+
+        cpu.pc += 2;
+        cpu_cycle +=2; 
+        return 0;
+    }
+
     /*
      *
      * -------------------------- ABS -------------------------- 
@@ -373,7 +485,7 @@ int exec_instr() {
         unsigned char args[3] = {mem[cpu.pc], mem[cpu.pc+1], mem[cpu.pc+2]};
         print_cpu(args, 3);
         //push current pc to stack
-        push_word(cpu.sp); 
+        push_word(cpu.pc + 2); 
         //set pc to abs 
         cpu.pc = args[2] << 8;
         cpu.pc |= args[1];
@@ -479,6 +591,75 @@ int exec_instr() {
         return 0;
     }
 
+    //BVS rel: branch if overflow set
+    else if(opcode == 0x70) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+
+        if(cpu.of == 1) {
+            cpu.pc += mem[cpu.pc+1];
+            //3 or 4 cycles depending on page boundary
+            if(same_page(cpu.pc, cpu.pc + mem[cpu.pc+1])) {
+                cpu_cycle += 3;
+            }
+            else {
+                cpu_cycle += 4;
+            }
+        }
+        //not branching
+        else {
+            cpu_cycle += 2;
+        }
+        cpu.pc += 2;
+        return 0;
+    }
+
+    //BVC rel: branch if overflow clear
+    else if(opcode == 0x50) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+
+        if(cpu.of == 0) {
+            cpu.pc += mem[cpu.pc+1];
+            //3 or 4 cycles depending on page boundary
+            if(same_page(cpu.pc, cpu.pc + mem[cpu.pc+1])) {
+                cpu_cycle += 3;
+            }
+            else {
+                cpu_cycle += 4;
+            }
+        }
+        //not branching
+        else {
+            cpu_cycle += 2;
+        }
+        cpu.pc += 2;
+        return 0;
+    }
+
+    //BPL rel: branch if negative flag is cleared
+    else if(opcode == 0x10) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+
+        if(cpu.neg == 0) {
+            cpu.pc += mem[cpu.pc+1];
+            //3 or 4 cycles depending on page boundary
+            if(same_page(cpu.pc, cpu.pc + mem[cpu.pc+1])) {
+                cpu_cycle += 3;
+            }
+            else {
+                cpu_cycle += 4;
+            }
+        }
+        //not branching
+        else {
+            cpu_cycle += 2;
+        }
+        cpu.pc += 2;
+        return 0;
+    }
+
     /*
      *
      * -------------------------- ZPG -------------------------- 
@@ -509,6 +690,26 @@ int exec_instr() {
         return 0;
     }
 
+    //BIT zpg: read mem value at zpg address and set status flags and also logical and register acc and mem value to set zf
+    else if(opcode == 0x24) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+        unsigned char addr = mem[cpu.pc+1];
+        //set zf if result of AND is zero 
+        if((cpu.acc & mem[addr]) == 0) {
+            cpu.zf = 1;
+        }
+        else {
+            cpu.zf = 0;
+        }
+        //set status flags based on bits at mem location
+        cpu.neg = mem[addr] >> 7;
+        cpu.of = (mem[addr] >> 6) & 1;
+
+        cpu.pc += 2;
+        cpu_cycle += 3;
+        return 0;
+    }
     cpu.pc += 1; 
     return 0;
 }
