@@ -7,7 +7,7 @@
 
 typedef struct CPU {
     //accumulator
-    char acc;
+    unsigned char acc;
     //index register x
     unsigned char x;
     //index register y
@@ -101,6 +101,59 @@ unsigned char encode_status() {
     return status;
 }
 
+//set cpu flags based on status value
+void decode_status(unsigned char status) {
+    //cf
+    if((status & 0x1) == 0x1) {
+        cpu.cf = 1;
+    }
+    else {
+        cpu.cf = 0;
+    }
+
+    //zf
+    if((status & 0x2) == 0x2) {
+        cpu.zf = 1;
+    }
+    else {
+        cpu.zf = 0;
+    }
+
+    //id
+    if((status & 0x4) == 0x4) {
+        cpu.id = 1;
+    }
+    else {
+        cpu.id = 0;
+    }
+    
+    //dm
+    if((status & 0x8) == 0x8) {
+        cpu.dm = 1;
+    }
+    else {
+        cpu.dm = 0;
+    }
+
+    //brk is ignored
+
+    //of
+    if((status & 0x40) == 0x40) {
+        cpu.of = 1;
+    }
+    else {
+        cpu.of = 0;
+    }
+
+    //neg
+    if((status & 0x80) == 0x80) {
+        cpu.neg = 1;
+    }
+    else {
+        cpu.neg = 0;
+    }
+}
+
 //print cpu state
 void print_cpu(unsigned char *args, int len) {
     printf("%X  ", cpu.pc);
@@ -116,7 +169,7 @@ void print_cpu(unsigned char *args, int len) {
     else {
         printf("       ");
     }
-    printf("A:%02X X:%02X Y:%02U P:%02X SP:%X CYC:%d\n", (unsigned char) cpu.acc, cpu.x, cpu.y, encode_status(), cpu.sp, cpu_cycle);
+    printf("A:%02X X:%02X Y:%02X P:%02X SP:%X CYC:%d\n", (unsigned char) cpu.acc, cpu.x, cpu.y, encode_status(), cpu.sp, cpu_cycle);
 }
 
 //are addresses on same page?
@@ -130,6 +183,43 @@ int same_page(short address1, short address2) {
     else {
         return 0;
     }
+}
+
+//after acc is changed, update zf and neg
+void set_flags_a() {
+    //set zf
+    if(cpu.acc == 0) {
+        cpu.zf = 1;
+    }
+    else {
+        cpu.zf = 0;
+    }
+    //set neg
+    cpu.neg = (unsigned char) cpu.acc >> 7;
+}
+
+void set_flags_x() {
+    //set zf
+    if(cpu.x == 0) {
+        cpu.zf = 1;
+    }
+    else {
+        cpu.zf = 0;
+    }
+    //set neg
+    cpu.neg = (unsigned char) cpu.x >> 7;
+}
+
+void set_flags_y() {
+    //set zf
+    if(cpu.y == 0) {
+        cpu.zf = 1;
+    }
+    else {
+        cpu.zf = 0;
+    }
+    //set neg
+    cpu.neg = (unsigned char) cpu.y >> 7;
 }
 
 //push/pop stuff from stack
@@ -357,17 +447,50 @@ int exec_instr() {
         unsigned char args[1] = {mem[cpu.pc]};
         print_cpu(args, 1);
         cpu.acc = pop();
-        //set zf
-        if(cpu.acc == 0) {
-            cpu.zf = 1;
-        }
-        else {
-            cpu.zf = 0;
-        }
-        //set neg
-        cpu.neg = cpu.acc >> 7;
+        set_flags_a();
         cpu.pc += 1;
         cpu_cycle += 4;
+        return 0;
+    }
+
+    //PHA: push acc onto stack
+    else if(opcode == 0x48) {
+        unsigned char args[1] = {mem[cpu.pc]};
+        print_cpu(args, 1);
+        push(cpu.acc);
+        cpu.pc += 1;
+        cpu_cycle += 3;
+        return 0;
+    }
+
+    //PLP: set processor status from stack
+    else if(opcode == 0x28) {
+        unsigned char args[1] = {mem[cpu.pc]};
+        print_cpu(args, 1);
+        decode_status(pop());
+        cpu.pc += 1;
+        cpu_cycle += 4;
+        return 0;
+    }
+
+    //CLV: clear overflow flag
+    else if(opcode == 0xB8) {
+        unsigned char args[1] = {mem[cpu.pc]};
+        print_cpu(args, 1);
+        cpu.of = 0;
+        cpu.pc += 1;
+        cpu_cycle += 2;
+        return 0;
+    }
+
+    //INY: increment y
+    else if(opcode == 0xC8) {
+        unsigned char args[1] = {mem[cpu.pc]};
+        print_cpu(args, 1);
+        cpu.y += 1;
+        set_flags_y();
+        cpu.pc += 1;
+        cpu_cycle += 2;
         return 0;
     }
     
@@ -383,15 +506,19 @@ int exec_instr() {
         print_cpu(args, 2);
         //load x with imm value
         cpu.x = mem[cpu.pc+1];
-        //set flags
-        if(cpu.x == 0) {
-            cpu.zf = 1;
-        } 
-        else {
-            cpu.zf = 0;
-        }
-        cpu.neg = cpu.x >> 7;
+        set_flags_x();
+        cpu.pc += 2;
+        cpu_cycle +=2; 
+        return 0;
+    }
 
+    //LDY imm: load register y with imm
+    else if(opcode == 0xA0) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+        //load y with imm value
+        cpu.y = mem[cpu.pc+1];
+        set_flags_y();
         cpu.pc += 2;
         cpu_cycle +=2; 
         return 0;
@@ -403,15 +530,7 @@ int exec_instr() {
         print_cpu(args, 2);
         //load a with imm value
         cpu.acc = mem[cpu.pc+1];
-        //set flags
-        if(cpu.acc == 0) {
-            cpu.zf = 1;
-        } 
-        else {
-            cpu.zf = 0;
-        }
-        cpu.neg = (unsigned char) cpu.acc >> 7;
-
+        set_flags_a();
         cpu.pc += 2;
         cpu_cycle +=2; 
         return 0;
@@ -423,19 +542,101 @@ int exec_instr() {
         print_cpu(args, 2);
         //load a with imm value
         cpu.acc &= args[1];
-        //set flags
-        if(cpu.acc == 0) {
-            cpu.zf = 1;
-        } 
-        else {
-            cpu.zf = 0;
-        }
-        cpu.neg = (unsigned char) cpu.acc >> 7;
-
+        set_flags_a();
         cpu.pc += 2;
         cpu_cycle +=2; 
         return 0;
     }
+
+    //ORA imm: acc = acc | imm
+    else if(opcode == 0x09) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+        //load a with imm value
+        cpu.acc |= args[1];
+        set_flags_a();
+        cpu.pc += 2;
+        cpu_cycle +=2; 
+        return 0;
+    }
+
+    //EOR imm: acc = acc ^ imm
+    else if(opcode == 0x49) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+        //load a with imm value
+        cpu.acc ^= args[1];
+        set_flags_a();
+        cpu.pc += 2;
+        cpu_cycle +=2; 
+        return 0;
+    }
+
+    //ADC imm: add with carry
+    else if(opcode == 0x69) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+
+        short result = cpu.acc + args[1] + cpu.cf;
+        //setting carry
+        if(result > 0xFF) {
+            cpu.cf = 1;
+        }
+        else {
+            cpu.cf = 0;
+        }
+        //setting overflow
+        if((cpu.acc >> 7) == (args[1] >> 7)) {
+            if((result >> 7) != (cpu.acc >> 7)) {
+                cpu.of = 1;
+            }
+            else {
+                cpu.of = 0;
+            }
+        }
+        else {
+            cpu.of = 0;
+        }
+        cpu.acc = (unsigned char) result;
+        set_flags_a();
+        cpu.pc += 2;
+        cpu_cycle +=2; 
+        return 0;
+    }
+
+    //SBC imm: subtract with carry
+    else if(opcode == 0xE9) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+
+        short result = cpu.acc + (unsigned char) ~args[1] + (unsigned char) cpu.cf;
+        
+        //setting carry
+        if(result > 0xFF) {
+            cpu.cf = 1;
+        }
+        else {
+            cpu.cf = 0;
+        }
+        //setting overflow
+        if((cpu.acc >> 7) == (~args[1] >> 7)) {
+            if((result >> 7) != (cpu.acc >> 7)) {
+                cpu.of = 1;
+            }
+            else {
+                cpu.of = 0;
+            }
+        }
+        else {
+            cpu.of = 0;
+        }
+        cpu.acc = (unsigned char) result;
+        set_flags_a();
+
+        cpu.pc += 2;
+        cpu_cycle += 2;
+        return 0;
+    } 
 
     //CMP imm: compare acc and imm and set flags
     else if(opcode == 0xC9) {
@@ -454,7 +655,55 @@ int exec_instr() {
         else {
             cpu.zf = 0;
         }
-        cpu.neg = (unsigned char) ((cpu.acc - args[1]) >> 7);
+        cpu.neg = (((unsigned char) (cpu.acc - args[1])) >> 7);
+
+        cpu.pc += 2;
+        cpu_cycle +=2; 
+        return 0;
+    }
+
+    //CPX imm: compare x and imm and set flags
+    else if(opcode == 0xE0) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+        //set flags
+        if(cpu.x >= args[1]) {
+            cpu.cf = 1;
+        }
+        else {
+            cpu.cf = 0;
+        }
+        if(cpu.x == args[1]) {
+            cpu.zf = 1;
+        } 
+        else {
+            cpu.zf = 0;
+        }
+        cpu.neg = (((unsigned char) (cpu.x - args[1])) >> 7);
+
+        cpu.pc += 2;
+        cpu_cycle +=2; 
+        return 0;
+    }
+
+    //CPY imm: compare y and imm and set flags
+    else if(opcode == 0xC0) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+        //set flags
+        if(cpu.y >= args[1]) {
+            cpu.cf = 1;
+        }
+        else {
+            cpu.cf = 0;
+        }
+        if(cpu.y == args[1]) {
+            cpu.zf = 1;
+        } 
+        else {
+            cpu.zf = 0;
+        }
+        cpu.neg = (((unsigned char) (cpu.y - args[1])) >> 7);
 
         cpu.pc += 2;
         cpu_cycle +=2; 
@@ -660,6 +909,29 @@ int exec_instr() {
         return 0;
     }
 
+    //BMI rel: branch if negative flag is set
+    else if(opcode == 0x30) {
+        unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+        print_cpu(args, 2);
+
+        if(cpu.neg == 1) {
+            cpu.pc += mem[cpu.pc+1];
+            //3 or 4 cycles depending on page boundary
+            if(same_page(cpu.pc, cpu.pc + mem[cpu.pc+1])) {
+                cpu_cycle += 3;
+            }
+            else {
+                cpu_cycle += 4;
+            }
+        }
+        //not branching
+        else {
+            cpu_cycle += 2;
+        }
+        cpu.pc += 2;
+        return 0;
+    }
+
     /*
      *
      * -------------------------- ZPG -------------------------- 
@@ -685,6 +957,7 @@ int exec_instr() {
         unsigned char addr = mem[cpu.pc+1];
         //store acc 
         mem[addr] = cpu.acc;
+
         cpu.pc += 2;
         cpu_cycle += 3;
         return 0;
