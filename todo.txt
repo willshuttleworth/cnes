@@ -1,7 +1,3 @@
-start with fixing sbc (again)
-
-print needs to be outside of functions that have different logs based on address mode
-
 how does a program end?
 
 non shit name

@@ -235,10 +235,7 @@ void push(unsigned char byte) {
         return;
     }
 
-    for(unsigned short i = cpu.sp; i <= 0xFF; i++) {
-        mem[0x100 + i - 1] = mem[0x100 + i];
-    }
-    mem[STACK_TOP] = byte;
+    mem[cpu.sp + 0x100] = byte;
     cpu.sp -= 1;
 }
 
@@ -254,14 +251,9 @@ unsigned char pop() {
         puts("stack underflow"); 
         exit(0); //is there a sentinel value that could be returned instead of crashing?
     }
-
-    //save mem[STACK_TOP], move everything else up an address
-    unsigned char popped = mem[STACK_TOP];
-    for(short i = 0xFF; i > cpu.sp; i--) {
-        mem[0x100 + i + 1] = mem[0x100 + i];
-    }
+    
     cpu.sp += 1;
-    return popped;
+    return mem[cpu.sp + 0x100];
 }
 
 short pop_word() {
@@ -278,7 +270,7 @@ void print_stack() {
         return;
     }
     printf("stack: ");
-    for(short i = 0xFF; i > cpu.sp; i--) {
+    for(short i = 0xFF; i > 0; i--) {
         printf("%x ", mem[0x100 + i]);
     }
     printf("\n");
@@ -303,7 +295,7 @@ void stack_test() {
     push(5); //should print overflow warning
     //print_stack(); //should be full
     for(int i = 0; i < 256; i++) {
-        pop();
+        printf("popped %x\n", pop());
         print_stack();
     }
     //pop(); //should underflow
@@ -349,6 +341,17 @@ void brk() {
     return;
 }
 
+//RTI: return from interrupt
+void rti() {
+    unsigned char args[1] = {mem[cpu.pc]};
+    print_cpu(args, 1);
+
+    decode_status(pop());
+
+    cpu.pc = pop_word();
+    cpu_cycle += 6;
+}
+
 //CLC impl: set carry flag to zero
 void clc() {
     unsigned char args[2] = {mem[cpu.pc]};
@@ -383,7 +386,7 @@ void nop() {
 void rts() {
     unsigned char args[1] = {mem[cpu.pc]};
     print_cpu(args, 1);
-    cpu.pc = pop_word();
+    cpu.pc = pop_word() + 1;
     cpu_cycle += 6;
     return;
 }
@@ -470,6 +473,17 @@ void clv() {
     return;
 }
 
+//INX: increment x
+void inx() {
+    unsigned char args[1] = {mem[cpu.pc]};
+    print_cpu(args, 1);
+    cpu.x += 1;
+    set_flags_x();
+    cpu.pc += 1;
+    cpu_cycle += 2;
+    return;
+}
+
 //INY: increment y
 void iny() {
     unsigned char args[1] = {mem[cpu.pc]};
@@ -481,10 +495,95 @@ void iny() {
     return;
 }
 
+//TAX: transfer acc to x
+void tax() {
+    unsigned char args[1] = {mem[cpu.pc]};
+    print_cpu(args, 1);
+    cpu.x = cpu.acc;
+    set_flags_x();
+    cpu.pc += 1;
+    cpu_cycle += 2;
+    return;
+}
+
+//TAY: transfer acc to y
+void tay() {
+    unsigned char args[1] = {mem[cpu.pc]};
+    print_cpu(args, 1);
+    cpu.y = cpu.acc;
+    set_flags_y();
+    cpu.pc += 1;
+    cpu_cycle += 2;
+    return;
+}
+
+//TYA: transfer y to acc
+void tya() {
+    unsigned char args[1] = {mem[cpu.pc]};
+    print_cpu(args, 1);
+    cpu.acc = cpu.y;
+    set_flags_a();
+    cpu.pc += 1;
+    cpu_cycle += 2;
+    return;
+}
+
+//TXA: transfer x to acc
+void txa() {
+    unsigned char args[1] = {mem[cpu.pc]};
+    print_cpu(args, 1);
+    cpu.acc = cpu.x;
+    set_flags_a();
+    cpu.pc += 1;
+    cpu_cycle += 2;
+    return;
+}
+
+//TXS: transfer x to sp
+void txs() {
+    unsigned char args[1] = {mem[cpu.pc]};
+    print_cpu(args, 1);
+    cpu.sp = cpu.x;
+    cpu.pc += 1;
+    cpu_cycle += 2;
+    return;
+}
+
+//TSX: transfer sp to x
+void tsx() {
+    unsigned char args[1] = {mem[cpu.pc]};
+    print_cpu(args, 1);
+    cpu.x = cpu.sp;
+    set_flags_x();
+    cpu.pc += 1;
+    cpu_cycle += 2;
+    return;
+}
+
+//DEX: decrement x
+void dex() {
+    unsigned char args[1] = {mem[cpu.pc]};
+    print_cpu(args, 1);
+    cpu.x -= 1;
+    set_flags_x();
+    cpu.pc += 1;
+    cpu_cycle += 2;
+    return;
+}
+
+//DEY: decrement y
+void dey() {
+    unsigned char args[1] = {mem[cpu.pc]};
+    print_cpu(args, 1);
+    cpu.y -= 1;
+    set_flags_y();
+    cpu.pc += 1;
+    cpu_cycle += 2;
+    return;
+}
+
 //LDX: load register x with data
 void ldx(unsigned char data) {
-    unsigned char args[2] = {mem[cpu.pc], data};
-    print_cpu(args, 2);
     //load x with imm value
     cpu.x = data;
     set_flags_x();
@@ -503,8 +602,6 @@ void ldy(unsigned char data) {
 
 //LDA: load register acc with data
 void lda(unsigned char data) {
-    unsigned char args[2] = {mem[cpu.pc], data};
-    print_cpu(args, 2);
     //load a with imm value
     cpu.acc = data;
     set_flags_a();
@@ -543,9 +640,6 @@ void eor(unsigned char data) {
 
 //ADC: add with carry
 void adc(unsigned char data) {
-    unsigned char args[2] = {mem[cpu.pc], data};
-    print_cpu(args, 2);
-
     short result = cpu.acc + data + cpu.cf;
     //setting carry
     if(result > 0xFF) {
@@ -555,7 +649,7 @@ void adc(unsigned char data) {
         cpu.cf = 0;
     }
     //setting overflow
-    if((cpu.acc >> 7) == (args[1] >> 7)) {
+    if((cpu.acc >> 7) == (data >> 7)) {
         if((result >> 7) != (cpu.acc >> 7)) {
             cpu.of = 1;
         }
@@ -576,6 +670,7 @@ void sbc(unsigned char data) {
     unsigned char args[2] = {mem[cpu.pc], data};
     print_cpu(args, 2);
 
+    
     short result = cpu.acc + (unsigned char) ~data + (unsigned char) cpu.cf;
     
     //setting carry
@@ -900,6 +995,18 @@ void bit(short addr) {
     return;
 }
 
+//LSR: logical shift right
+unsigned char lsr(unsigned char data) {
+    cpu.cf = data & 1;
+    return data >> 1;
+}
+
+//ASL: arithemtic shift left
+unsigned char asl(unsigned char data) {
+    cpu.cf = (data & 0x80) >> 7;
+    return (unsigned char) data << 1;
+}
+
 int exec_instr() {
     unsigned char opcode = mem[cpu.pc];
     switch(parse_opcode(opcode)) {
@@ -921,8 +1028,17 @@ int exec_instr() {
             else if(opcode == 0xEA) {
                 nop();
             }
+            else if(opcode == 0xE8) {
+                inx();
+            }
             else if(opcode == 0xC8) {
                 iny();
+            }
+            else if(opcode == 0xCA) {
+                dex();
+            }
+            else if(opcode == 0x88) {
+                dey();
             }
             else if(opcode == 0xB8) {
                 clv();
@@ -951,6 +1067,27 @@ int exec_instr() {
             else if(opcode == 0x60) {
                 rts();
             }
+            else if(opcode == 0xAA) {
+                tax();
+            }
+            else if(opcode == 0xA8) {
+                tay();
+            }
+            else if(opcode == 0x98) {
+                tya();
+            }
+            else if(opcode == 0x8A) {
+                txa();
+            }
+            else if(opcode == 0x9A) {
+                txs();
+            }
+            else if(opcode == 0xBA) {
+                tsx();
+            }
+            else if(opcode == 0x40) {
+                rti();
+            }
             else {
                 cpu.pc++;
             }
@@ -958,12 +1095,16 @@ int exec_instr() {
         //imm
         case 2:
             if(opcode == 0xA2) {
-                ldx(mem[cpu.pc+1]);
+                unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+                print_cpu(args, 2);
+                ldx(args[1]);
             }
             else if(opcode == 0xA0) {
                 ldy(mem[cpu.pc+1]);
             }
             else if(opcode == 0xA9) {
+                unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
+                print_cpu(args, 2);
                 lda(mem[cpu.pc+1]);
             }
             else if(opcode == 0x29) {
@@ -976,10 +1117,14 @@ int exec_instr() {
                 eor(mem[cpu.pc+1]);
             }
             else if(opcode == 0x69) {
+                unsigned char args[2] = {opcode, mem[cpu.pc+1]};
+                print_cpu(args, 2);
                 adc(mem[cpu.pc+1]);
             }
             else if(opcode == 0xE9) {
-                sbc(mem[cpu.pc+1]);
+                unsigned char args[2] = {opcode, mem[cpu.pc+1]};
+                print_cpu(args, 2);
+                adc(~mem[cpu.pc+1]);
             }
             else if(opcode == 0xC9) {
                 cmp(mem[cpu.pc+1]);
@@ -998,7 +1143,25 @@ int exec_instr() {
             break;
         //acc
         case 3:
-            cpu.pc++;
+            if(opcode == 0x4A) {
+                unsigned char args[1] = {opcode};
+                print_cpu(args, 1);
+                cpu.acc = lsr(cpu.acc);
+                set_flags_a();
+                cpu.pc++;
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x0A) {
+                unsigned char args[1] = {opcode};
+                print_cpu(args, 1);
+                cpu.acc = asl(cpu.acc);
+                set_flags_a();
+                cpu.pc++;
+                cpu_cycle += 2;
+            }
+            else {
+                cpu.pc++;
+            }
             break;
         //abs
         case 4:
@@ -1009,6 +1172,36 @@ int exec_instr() {
             else if(opcode == 0x20) {
                 jsr(mem[cpu.pc+1], mem[cpu.pc+2]);
                 cpu_cycle += 6;
+            }
+            else if(opcode == 0x8E) {
+                unsigned char args[3] = {mem[cpu.pc], mem[cpu.pc+1], mem[cpu.pc+2]};
+                print_cpu(args, 3);
+                short addr = args[2];
+                addr <<= 8;
+                addr |= args[1];
+                stx(addr);
+                cpu.pc += 2;
+                cpu_cycle += 4;
+            }
+            else if(opcode == 0xAE) {
+                unsigned char args[3] = {mem[cpu.pc], mem[cpu.pc+1], mem[cpu.pc+2]};
+                print_cpu(args, 3);
+                short addr = args[2];
+                addr <<= 8;
+                addr |= args[1];
+                ldx(mem[addr]);
+                cpu.pc += 3;
+                cpu_cycle += 4;
+            }
+            else if(opcode == 0xAD) {
+                unsigned char args[3] = {mem[cpu.pc], mem[cpu.pc+1], mem[cpu.pc+2]};
+                print_cpu(args, 3);
+                short addr = args[2];
+                addr <<= 8;
+                addr |= args[1];
+                lda(mem[addr]);
+                cpu.pc += 3;
+                cpu_cycle += 4;
             }
             else {
                 cpu.pc++;
