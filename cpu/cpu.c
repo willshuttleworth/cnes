@@ -592,8 +592,6 @@ void ldx(unsigned char data) {
 
 //LDY: load register y with data
 void ldy(unsigned char data) {
-    unsigned char args[2] = {mem[cpu.pc], data};
-    print_cpu(args, 2);
     //load y with imm value
     cpu.y = data;
     set_flags_y();
@@ -610,8 +608,6 @@ void lda(unsigned char data) {
 
 //AND: acc = acc & data
 void and(unsigned char data) {
-    unsigned char args[2] = {mem[cpu.pc], data};
-    print_cpu(args, 2);
     //load a with data value
     cpu.acc &= data;
     set_flags_a();
@@ -620,8 +616,6 @@ void and(unsigned char data) {
 
 //ORA: acc = acc | data
 void ora(unsigned char data) {
-    unsigned char args[2] = {mem[cpu.pc], data};
-    print_cpu(args, 2);
     //load a with data value
     cpu.acc |= data;
     set_flags_a();
@@ -630,8 +624,6 @@ void ora(unsigned char data) {
 
 //EOR: acc = acc ^ data
 void eor(unsigned char data) {
-    unsigned char args[2] = {mem[cpu.pc], data};
-    print_cpu(args, 2);
     //load a with data value
     cpu.acc ^= data;
     set_flags_a();
@@ -667,10 +659,6 @@ void adc(unsigned char data) {
 
 //SBC: subtract with carry
 void sbc(unsigned char data) {
-    unsigned char args[2] = {mem[cpu.pc], data};
-    print_cpu(args, 2);
-
-    
     short result = cpu.acc + (unsigned char) ~data + (unsigned char) cpu.cf;
     
     //setting carry
@@ -681,7 +669,7 @@ void sbc(unsigned char data) {
         cpu.cf = 0;
     }
     //setting overflow
-    if((cpu.acc >> 7) == (~args[1] >> 7)) {
+    if((cpu.acc >> 7) == (~data >> 7)) {
         if((result >> 7) != (cpu.acc >> 7)) {
             cpu.of = 1;
         }
@@ -699,8 +687,6 @@ void sbc(unsigned char data) {
 
 //CMP: compare acc and data and set flags
 void cmp(unsigned char data) {
-    unsigned char args[2] = {mem[cpu.pc], data};
-    print_cpu(args, 2);
     //set flags
     if(cpu.acc >= data) {
         cpu.cf = 1;
@@ -720,8 +706,6 @@ void cmp(unsigned char data) {
 
 //CPX: compare x and data and set flags
 void cpx(unsigned char data) {
-    unsigned char args[2] = {mem[cpu.pc], data};
-    print_cpu(args, 2);
     //set flags
     if(cpu.x >= data) {
         cpu.cf = 1;
@@ -741,8 +725,6 @@ void cpx(unsigned char data) {
 
 //CPY: compare y and data and set flags
 void cpy(unsigned char data) {
-    unsigned char args[2] = {mem[cpu.pc], data};
-    print_cpu(args, 2);
     //set flags
     if(cpu.y >= data) {
         cpu.cf = 1;
@@ -761,9 +743,6 @@ void cpy(unsigned char data) {
 }
 //JMP: jump to address
 void jmp(unsigned char lo, unsigned char hi) {
-    unsigned char args[3] = {mem[cpu.pc], lo, hi};
-    print_cpu(args, 3);
-
     //set next pc to address
     cpu.pc = hi;
     cpu.pc <<= 8;
@@ -773,8 +752,6 @@ void jmp(unsigned char lo, unsigned char hi) {
 
 //JSR: jump to address, save current pc
 void jsr(unsigned char lo, unsigned char hi) {
-    unsigned char args[3] = {mem[cpu.pc], lo, hi};
-    print_cpu(args, 3);
     //push current pc to stack
     push_word(cpu.pc + 2); 
     //set pc to new addr
@@ -784,9 +761,6 @@ void jsr(unsigned char lo, unsigned char hi) {
 }
 //BCS rel: branch if carry bit is set
 void bcs(unsigned char offset) {
-    unsigned char args[2] = {mem[cpu.pc], offset};
-    print_cpu(args, 2);
-
     if(cpu.cf == 1) {
         cpu.pc += offset;
         //3 or 4 cycles depending on page boundary
@@ -807,9 +781,6 @@ void bcs(unsigned char offset) {
 
 //BCC rel: branch if carry bit is cleared
 void bcc(unsigned char offset) {
-    unsigned char args[2] = {mem[cpu.pc], offset};
-    print_cpu(args, 2);
-
     if(cpu.cf == 0) {
         cpu.pc += offset;
         //3 or 4 cycles depending on page boundary
@@ -830,9 +801,6 @@ void bcc(unsigned char offset) {
 
 //BEQ rel: branch if zero flag is set
 void beq(unsigned char offset) {
-    unsigned char args[2] = {mem[cpu.pc], offset};
-    print_cpu(args, 2);
-
     if(cpu.zf == 1) {
         cpu.pc += offset;
         //3 or 4 cycles depending on page boundary
@@ -853,9 +821,6 @@ void beq(unsigned char offset) {
 
 //BNE rel: branch if zero flag is clear
 void bne(unsigned char offset) {
-    unsigned char args[2] = {mem[cpu.pc], offset};
-    print_cpu(args, 2);
-
     if(cpu.zf == 0) {
         cpu.pc += offset;
         //3 or 4 cycles depending on page boundary
@@ -876,9 +841,6 @@ void bne(unsigned char offset) {
 
 //BVS rel: branch if overflow set
 void bvs(unsigned char offset) {
-    unsigned char args[2] = {mem[cpu.pc], offset};
-    print_cpu(args, 2);
-
     if(cpu.of == 1) {
         cpu.pc += offset;
         //3 or 4 cycles depending on page boundary
@@ -899,9 +861,6 @@ void bvs(unsigned char offset) {
 
 //BVC rel: branch if overflow clear
 void bvc(unsigned char offset) {
-    unsigned char args[2] = {mem[cpu.pc], offset};
-    print_cpu(args, 2);
-
     if(cpu.of == 0) {
         cpu.pc += offset;
         //3 or 4 cycles depending on page boundary
@@ -922,9 +881,6 @@ void bvc(unsigned char offset) {
 
 //BPL rel: branch if negative flag is cleared
 void bpl(unsigned char offset) {
-    unsigned char args[2] = {mem[cpu.pc], offset};
-    print_cpu(args, 2);
-
     if(cpu.neg == 0) {
         cpu.pc += offset;
         //3 or 4 cycles depending on page boundary
@@ -945,9 +901,6 @@ void bpl(unsigned char offset) {
 
 //BMI rel: branch if negative flag is set
 void bmi(unsigned char offset) {
-    unsigned char args[2] = {mem[cpu.pc], offset};
-    print_cpu(args, 2);
-
     if(cpu.neg == 1) {
         cpu.pc += offset;
         //3 or 4 cycles depending on page boundary
@@ -1007,8 +960,31 @@ unsigned char asl(unsigned char data) {
     return (unsigned char) data << 1;
 }
 
+//ROR: rotate right
+unsigned char ror(unsigned char data) {
+    int new_cf = data & 1;
+    unsigned char rotated = data >> 1;
+    if(cpu.cf == 1) {
+        rotated |= 128;
+    }
+    cpu.cf = new_cf;
+    return rotated;
+}
+
+//ROL: rotate left
+unsigned char rol(unsigned char data) {
+    int new_cf = (data & 128) >> 7;
+    unsigned char rotated = data << 1;
+    if(cpu.cf == 1) {
+        rotated |= 1;
+    }
+    cpu.cf = new_cf;
+    return rotated;
+}
+
 int exec_instr() {
     unsigned char opcode = mem[cpu.pc];
+    unsigned char args[3] = {opcode, mem[cpu.pc+1], mem[cpu.pc+2]};
     switch(parse_opcode(opcode)) {
         //default
         case 0:
@@ -1094,17 +1070,14 @@ int exec_instr() {
             break;
         //imm
         case 2:
+            print_cpu(args, 2);
             if(opcode == 0xA2) {
-                unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
-                print_cpu(args, 2);
                 ldx(args[1]);
             }
             else if(opcode == 0xA0) {
                 ldy(mem[cpu.pc+1]);
             }
             else if(opcode == 0xA9) {
-                unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
-                print_cpu(args, 2);
                 lda(mem[cpu.pc+1]);
             }
             else if(opcode == 0x29) {
@@ -1117,13 +1090,9 @@ int exec_instr() {
                 eor(mem[cpu.pc+1]);
             }
             else if(opcode == 0x69) {
-                unsigned char args[2] = {opcode, mem[cpu.pc+1]};
-                print_cpu(args, 2);
                 adc(mem[cpu.pc+1]);
             }
             else if(opcode == 0xE9) {
-                unsigned char args[2] = {opcode, mem[cpu.pc+1]};
-                print_cpu(args, 2);
                 adc(~mem[cpu.pc+1]);
             }
             else if(opcode == 0xC9) {
@@ -1135,36 +1104,34 @@ int exec_instr() {
             else if(opcode == 0xC0) {
                 cpy(mem[cpu.pc+1]);
             }
-            else {
-                cpu.pc++;
-            }
             cpu.pc += 2;
             cpu_cycle += 2;
             break;
         //acc
         case 3:
+            print_cpu(args, 1);
             if(opcode == 0x4A) {
-                unsigned char args[1] = {opcode};
-                print_cpu(args, 1);
                 cpu.acc = lsr(cpu.acc);
                 set_flags_a();
-                cpu.pc++;
-                cpu_cycle += 2;
             }
             else if(opcode == 0x0A) {
-                unsigned char args[1] = {opcode};
-                print_cpu(args, 1);
                 cpu.acc = asl(cpu.acc);
                 set_flags_a();
-                cpu.pc++;
-                cpu_cycle += 2;
             }
-            else {
-                cpu.pc++;
+            else if(opcode == 0x6A) {
+                cpu.acc = ror(cpu.acc);
+                set_flags_a();
             }
+            else if(opcode == 0x2A) {
+                cpu.acc = rol(cpu.acc);
+                set_flags_a();
+            }
+            cpu.pc++;
+            cpu_cycle += 2;
             break;
         //abs
         case 4:
+            print_cpu(args, 3);
             if(opcode == 0x4C) {
                 jmp(mem[cpu.pc+1], mem[cpu.pc+2]);
                 cpu_cycle += 3;
@@ -1174,37 +1141,36 @@ int exec_instr() {
                 cpu_cycle += 6;
             }
             else if(opcode == 0x8E) {
-                unsigned char args[3] = {mem[cpu.pc], mem[cpu.pc+1], mem[cpu.pc+2]};
-                print_cpu(args, 3);
                 short addr = args[2];
                 addr <<= 8;
                 addr |= args[1];
                 stx(addr);
-                cpu.pc += 2;
                 cpu_cycle += 4;
+                cpu.pc += 3;
             }
             else if(opcode == 0xAE) {
-                unsigned char args[3] = {mem[cpu.pc], mem[cpu.pc+1], mem[cpu.pc+2]};
-                print_cpu(args, 3);
                 short addr = args[2];
                 addr <<= 8;
                 addr |= args[1];
                 ldx(mem[addr]);
-                cpu.pc += 3;
                 cpu_cycle += 4;
+                cpu.pc += 3;
             }
             else if(opcode == 0xAD) {
-                unsigned char args[3] = {mem[cpu.pc], mem[cpu.pc+1], mem[cpu.pc+2]};
-                print_cpu(args, 3);
                 short addr = args[2];
                 addr <<= 8;
                 addr |= args[1];
                 lda(mem[addr]);
-                cpu.pc += 3;
                 cpu_cycle += 4;
+                cpu.pc += 3;
             }
-            else {
-                cpu.pc++;
+            else if(opcode == 0x8D) {
+                short addr = args[2];
+                addr <<= 8;
+                addr |= args[1];
+                sta(addr);
+                cpu_cycle += 4;
+                cpu.pc += 3;
             }
             break;
         //abs_x
@@ -1221,7 +1187,20 @@ int exec_instr() {
             break;
         //x_ind
         case 8:
-            cpu.pc++;
+            print_cpu(args, 2);
+            short addr = mem[(cpu.x + args[1] + 1) % 256] << 8;
+            addr |= mem[(cpu.x + args[1]) % 256];
+            if(opcode == 0xA1) {
+                lda(mem[addr]); 
+            }
+            else if(opcode == 0x81) {
+                sta(addr);
+            }
+            else if(opcode == 0x01) {
+                ora(mem[addr]);
+            }
+            cpu.pc += 2;
+            cpu_cycle += 6;
             break;
         //ind_y
         case 9:
@@ -1229,6 +1208,7 @@ int exec_instr() {
             break;
         //rel
         case 10:
+            print_cpu(args, 2);
             if(opcode == 0xB0) {
                 bcs(mem[cpu.pc+1]);
             }
@@ -1259,33 +1239,22 @@ int exec_instr() {
             break;
         //zpg
         case 11:
+            print_cpu(args, 2);
+            addr = (short) args[1];
             if(opcode == 0x86) {
-                unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
-                print_cpu(args, 2);
-                short addr = (short) args[1];
                 stx(addr);
-                cpu.pc += 2;
-                cpu_cycle += 3;
             }
             else if(opcode == 0x85) {
-                unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
-                print_cpu(args, 2);
-                short addr = (short) args[1];
                 sta(addr);
-                cpu.pc += 2;
-                cpu_cycle += 3;
             }
             else if(opcode == 0x24) {
-                unsigned char args[2] = {mem[cpu.pc], mem[cpu.pc+1]};
-                print_cpu(args, 2);
-                short addr = (short) args[1];
                 bit(addr);
-                cpu.pc += 2;
-                cpu_cycle += 3;
             }
-            else {
-                cpu.pc++;
+            else if(opcode == 0xA5) {
+                lda(mem[addr]);
             }
+            cpu.pc += 2;
+            cpu_cycle += 3;
             break;
         //zpg_x
         case 12:
