@@ -3,7 +3,7 @@
 #include "../parser/parser.h"
 
 #define STACK_TOP 0x1FF
-#define PAGE_SIZE 256
+#define PAGE_SIZE 100
 
 typedef struct CPU {
     //accumulator
@@ -174,15 +174,25 @@ void print_cpu(unsigned char *args, int len) {
 
 //are addresses on same page?
 int same_page(short address1, short address2) {
-    int page1 = address1 / PAGE_SIZE;
-    int page2 = address2 / PAGE_SIZE;
     
-    if(page1 == page2) {
+    if(address1 >> 8 == address2 >> 8) {
         return 1;
     } 
     else {
         return 0;
     }
+}
+
+void branch(unsigned char offset) {
+    //3 or 4 cycles depending on page boundary
+    if(same_page(cpu.pc + 2, cpu.pc + offset)) {
+        cpu_cycle += 3;
+    }
+    else {
+        cpu_cycle += 4;
+    }
+    cpu.pc += offset;
+    return;
 }
 
 //after acc is changed, update zf and neg
@@ -195,7 +205,7 @@ void set_flags_a() {
         cpu.zf = 0;
     }
     //set neg
-    cpu.neg = (unsigned char) cpu.acc >> 7;
+    cpu.neg = cpu.acc >> 7;
 }
 
 void set_flags_x() {
@@ -207,7 +217,7 @@ void set_flags_x() {
         cpu.zf = 0;
     }
     //set neg
-    cpu.neg = (unsigned char) cpu.x >> 7;
+    cpu.neg = cpu.x >> 7;
 }
 
 void set_flags_y() {
@@ -219,7 +229,7 @@ void set_flags_y() {
         cpu.zf = 0;
     }
     //set neg
-    cpu.neg = (unsigned char) cpu.y >> 7;
+    cpu.neg = cpu.y >> 7;
 }
 
 //push/pop stuff from stack
@@ -661,20 +671,14 @@ void adc(unsigned char data) {
 void sbc(unsigned char data) {
     short result = cpu.acc + (unsigned char) ~data + (unsigned char) cpu.cf;
     
-    //setting carry
-    if(result > 0xFF) {
-        cpu.cf = 1;
-    }
-    else {
-        cpu.cf = 0;
-    }
+    cpu.cf = result > 0xFF;
     //setting overflow
-    if((cpu.acc >> 7) == (~data >> 7)) {
+    if((cpu.acc >> 7) == (unsigned char) ~data >> 7) {
         if((result >> 7) != (cpu.acc >> 7)) {
-            cpu.of = 1;
+            cpu.of = cpu.acc  >> 7;
         }
         else {
-            cpu.of = 0;
+            cpu.of = (~cpu.acc) >> 7;
         }
     }
     else {
@@ -762,14 +766,7 @@ void jsr(unsigned char lo, unsigned char hi) {
 //BCS rel: branch if carry bit is set
 void bcs(unsigned char offset) {
     if(cpu.cf == 1) {
-        cpu.pc += offset;
-        //3 or 4 cycles depending on page boundary
-        if(same_page(cpu.pc, cpu.pc + offset)) {
-            cpu_cycle += 3;
-        }
-        else {
-            cpu_cycle += 4;
-        }
+        branch(offset);
     }
     //not branching
     else {
@@ -782,14 +779,7 @@ void bcs(unsigned char offset) {
 //BCC rel: branch if carry bit is cleared
 void bcc(unsigned char offset) {
     if(cpu.cf == 0) {
-        cpu.pc += offset;
-        //3 or 4 cycles depending on page boundary
-        if(same_page(cpu.pc, cpu.pc + offset)) {
-            cpu_cycle += 3;
-        }
-        else {
-            cpu_cycle += 4;
-        }
+        branch(offset);
     }
     //not branching
     else {
@@ -802,14 +792,7 @@ void bcc(unsigned char offset) {
 //BEQ rel: branch if zero flag is set
 void beq(unsigned char offset) {
     if(cpu.zf == 1) {
-        cpu.pc += offset;
-        //3 or 4 cycles depending on page boundary
-        if(same_page(cpu.pc, cpu.pc + offset)) {
-            cpu_cycle += 3;
-        }
-        else {
-            cpu_cycle += 4;
-        }
+        branch(offset);
     }
     //not branching
     else {
@@ -822,14 +805,7 @@ void beq(unsigned char offset) {
 //BNE rel: branch if zero flag is clear
 void bne(unsigned char offset) {
     if(cpu.zf == 0) {
-        cpu.pc += offset;
-        //3 or 4 cycles depending on page boundary
-        if(same_page(cpu.pc, cpu.pc + offset)) {
-            cpu_cycle += 3;
-        }
-        else {
-            cpu_cycle += 4;
-        }
+        branch(offset);
     }
     //not branching
     else {
@@ -842,14 +818,7 @@ void bne(unsigned char offset) {
 //BVS rel: branch if overflow set
 void bvs(unsigned char offset) {
     if(cpu.of == 1) {
-        cpu.pc += offset;
-        //3 or 4 cycles depending on page boundary
-        if(same_page(cpu.pc, cpu.pc + offset)) {
-            cpu_cycle += 3;
-        }
-        else {
-            cpu_cycle += 4;
-        }
+        branch(offset);
     }
     //not branching
     else {
@@ -862,14 +831,7 @@ void bvs(unsigned char offset) {
 //BVC rel: branch if overflow clear
 void bvc(unsigned char offset) {
     if(cpu.of == 0) {
-        cpu.pc += offset;
-        //3 or 4 cycles depending on page boundary
-        if(same_page(cpu.pc, cpu.pc + offset)) {
-            cpu_cycle += 3;
-        }
-        else {
-            cpu_cycle += 4;
-        }
+        branch(offset);
     }
     //not branching
     else {
@@ -882,14 +844,7 @@ void bvc(unsigned char offset) {
 //BPL rel: branch if negative flag is cleared
 void bpl(unsigned char offset) {
     if(cpu.neg == 0) {
-        cpu.pc += offset;
-        //3 or 4 cycles depending on page boundary
-        if(same_page(cpu.pc, cpu.pc + offset)) {
-            cpu_cycle += 3;
-        }
-        else {
-            cpu_cycle += 4;
-        }
+        branch(offset);
     }
     //not branching
     else {
@@ -902,14 +857,7 @@ void bpl(unsigned char offset) {
 //BMI rel: branch if negative flag is set
 void bmi(unsigned char offset) {
     if(cpu.neg == 1) {
-        cpu.pc += offset;
-        //3 or 4 cycles depending on page boundary
-        if(same_page(cpu.pc, cpu.pc + offset)) {
-            cpu_cycle += 3;
-        }
-        else {
-            cpu_cycle += 4;
-        }
+        branch(offset);
     }
     //not branching
     else {
@@ -923,6 +871,13 @@ void bmi(unsigned char offset) {
 void stx(short addr) {
     //store x 
     mem[addr] = cpu.x;
+    return;
+}
+
+//STY: store value in register y at addr
+void sty(short addr) {
+    //store y
+    mem[addr] = cpu.y;
     return;
 }
 
@@ -951,13 +906,19 @@ void bit(short addr) {
 //LSR: logical shift right
 unsigned char lsr(unsigned char data) {
     cpu.cf = data & 1;
-    return data >> 1;
+    unsigned char result = data >> 1;
+    cpu.zf = result == 0;
+    cpu.neg = result >> 7;
+    return result;
 }
 
 //ASL: arithemtic shift left
 unsigned char asl(unsigned char data) {
     cpu.cf = (data & 0x80) >> 7;
-    return (unsigned char) data << 1;
+    unsigned char result = (unsigned char) data << 1;
+    cpu.zf = result == 0;
+    cpu.neg = result >> 7;
+    return result;
 }
 
 //ROR: rotate right
@@ -967,6 +928,8 @@ unsigned char ror(unsigned char data) {
     if(cpu.cf == 1) {
         rotated |= 128;
     }
+    cpu.zf = rotated == 0;
+    cpu.neg = rotated >> 7;
     cpu.cf = new_cf;
     return rotated;
 }
@@ -978,8 +941,24 @@ unsigned char rol(unsigned char data) {
     if(cpu.cf == 1) {
         rotated |= 1;
     }
+    cpu.zf = rotated == 0;
+    cpu.neg = rotated >> 7;
     cpu.cf = new_cf;
     return rotated;
+}
+
+//INC: increment memory
+void inc(short addr) {
+    mem[addr] += 1;
+    cpu.zf = mem[addr] == 0;
+    cpu.neg = mem[addr] >> 7;
+}
+
+//DEC: decrement memory
+void dec(short addr) {
+    mem[addr] -= 1;
+    cpu.zf = mem[addr] == 0;
+    cpu.neg = mem[addr] >> 7;
 }
 
 int exec_instr() {
@@ -1131,6 +1110,9 @@ int exec_instr() {
             break;
         //abs
         case 4:
+            short addr = args[2];
+            addr <<= 8;
+            addr |= args[1];
             print_cpu(args, 3);
             if(opcode == 0x4C) {
                 jmp(mem[cpu.pc+1], mem[cpu.pc+2]);
@@ -1141,35 +1123,108 @@ int exec_instr() {
                 cpu_cycle += 6;
             }
             else if(opcode == 0x8E) {
-                short addr = args[2];
-                addr <<= 8;
-                addr |= args[1];
                 stx(addr);
                 cpu_cycle += 4;
                 cpu.pc += 3;
             }
+            else if(opcode == 0x8C) {
+                sty(addr);
+                cpu_cycle += 4;
+                cpu.pc += 3;
+            }
+            else if(opcode == 0xEC) {
+                cpx(mem[addr]);
+                cpu_cycle += 4;
+                cpu.pc += 3;
+            }
+            else if(opcode == 0xCC) {
+                cpy(mem[addr]);
+                cpu_cycle += 4;
+                cpu.pc += 3;
+            }
             else if(opcode == 0xAE) {
-                short addr = args[2];
-                addr <<= 8;
-                addr |= args[1];
                 ldx(mem[addr]);
                 cpu_cycle += 4;
                 cpu.pc += 3;
             }
+            else if(opcode == 0xAC) {
+                ldy(mem[addr]);
+                cpu_cycle += 4;
+                cpu.pc += 3;
+            }
             else if(opcode == 0xAD) {
-                short addr = args[2];
-                addr <<= 8;
-                addr |= args[1];
                 lda(mem[addr]);
                 cpu_cycle += 4;
                 cpu.pc += 3;
             }
             else if(opcode == 0x8D) {
-                short addr = args[2];
-                addr <<= 8;
-                addr |= args[1];
                 sta(addr);
                 cpu_cycle += 4;
+                cpu.pc += 3;
+            }
+            else if(opcode == 0x2C) {
+                bit(addr);
+                cpu_cycle += 4;
+                cpu.pc += 3;
+            }
+            else if(opcode == 0x0D) {
+                ora(mem[addr]);
+                cpu_cycle += 4;
+                cpu.pc += 3;
+            }
+            else if(opcode == 0x2D) {
+                and(mem[addr]);
+                cpu_cycle += 4;
+                cpu.pc += 3;
+            }
+            else if(opcode == 0x4D) {
+                eor(mem[addr]);
+                cpu_cycle += 4;
+                cpu.pc += 3;
+            }
+            else if(opcode == 0xEE) {
+                inc(addr);
+                cpu_cycle += 6;
+                cpu.pc += 3;
+            }
+            else if(opcode == 0xCE) {
+                dec(addr);
+                cpu_cycle += 6;
+                cpu.pc += 3;
+            }
+            else if(opcode == 0x6D) {
+                adc(mem[addr]);
+                cpu_cycle += 4;
+                cpu.pc += 3;
+            }
+            else if(opcode == 0xED) {
+                sbc(mem[addr]);
+                cpu_cycle += 4;
+                cpu.pc += 3;
+            }
+            else if(opcode == 0xCD) {
+                cmp(mem[addr]);
+                cpu_cycle += 4;
+                cpu.pc += 3;
+            }
+            else if(opcode == 0x4E) {
+                mem[addr] = lsr(mem[addr]);
+                cpu_cycle += 6;
+                cpu.pc += 3;
+            }
+            else if(opcode == 0x0E) {
+                mem[addr] = asl(mem[addr]);
+                cpu_cycle += 6;
+                cpu.pc += 3;
+            }
+            else if(opcode == 0x6E) {
+                mem[addr] = ror(mem[addr]);
+                cpu_cycle += 6;
+                cpu.pc += 3;
+            }
+            else if(opcode == 0x2E) {
+                mem[addr] = rol(mem[addr]);
+                cpu_cycle += 6;
                 cpu.pc += 3;
             }
             break;
@@ -1188,7 +1243,7 @@ int exec_instr() {
         //x_ind
         case 8:
             print_cpu(args, 2);
-            short addr = mem[(cpu.x + args[1] + 1) % 256] << 8;
+            addr = mem[(cpu.x + args[1] + 1) % 256] << 8;
             addr |= mem[(cpu.x + args[1]) % 256];
             if(opcode == 0xA1) {
                 lda(mem[addr]); 
@@ -1198,6 +1253,21 @@ int exec_instr() {
             }
             else if(opcode == 0x01) {
                 ora(mem[addr]);
+            }
+            else if(opcode == 0x21) {
+                and(mem[addr]);
+            }
+            else if(opcode == 0x41) {
+                eor(mem[addr]);
+            }
+            else if(opcode == 0x61) {
+                adc(mem[addr]);
+            }
+            else if(opcode == 0xE1) {
+                sbc(mem[addr]);
+            }
+            else if(opcode == 0xC1) {
+                cmp(mem[addr]);
             }
             cpu.pc += 2;
             cpu_cycle += 6;
@@ -1244,6 +1314,9 @@ int exec_instr() {
             if(opcode == 0x86) {
                 stx(addr);
             }
+            if(opcode == 0x84) {
+                sty(addr);
+            }
             else if(opcode == 0x85) {
                 sta(addr);
             }
@@ -1252,6 +1325,60 @@ int exec_instr() {
             }
             else if(opcode == 0xA5) {
                 lda(mem[addr]);
+            }
+            else if(opcode == 0xA6) {
+                ldx(mem[addr]);
+            }
+            else if(opcode == 0xA4) {
+                ldy(mem[addr]);
+            }
+            else if(opcode == 0x05) {
+                ora(mem[addr]);
+            }
+            else if(opcode == 0x45) {
+                eor(mem[addr]);
+            }
+            else if(opcode == 0x25) {
+                and(mem[addr]);
+            }
+            else if(opcode == 0x65) {
+                adc(mem[addr]);
+            }
+            else if(opcode == 0xE5) {
+                sbc(mem[addr]);
+            }
+            else if(opcode == 0xC5) {
+                cmp(mem[addr]);
+            }
+            else if(opcode == 0xE4) {
+                cpx(mem[addr]);
+            }
+            else if(opcode == 0xC4) {
+                cpy(mem[addr]);
+            }
+            else if(opcode == 0x46) {
+                mem[addr] = lsr(mem[addr]);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0xE6) {
+                inc(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0xC6) {
+                dec(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x06) {
+                mem[addr] = asl(mem[addr]);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x66) {
+                mem[addr] = ror(mem[addr]);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x26) {
+                mem[addr] = rol(mem[addr]);
+                cpu_cycle += 2;
             }
             cpu.pc += 2;
             cpu_cycle += 3;
