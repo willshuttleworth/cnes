@@ -156,7 +156,7 @@ void decode_status(unsigned char status) {
 
 //print cpu state
 void print_cpu(unsigned char *args, int len) {
-    printf("%X  ", cpu.pc);
+    printf("%04X  ", cpu.pc);
     for(int i = 0; i < len; i++) {
         printf("%02X ", args[i]);
     }
@@ -183,7 +183,7 @@ int same_page(short address1, short address2) {
     }
 }
 
-void branch(unsigned char offset) {
+void branch(char offset) {
     //3 or 4 cycles depending on page boundary
     if(same_page(cpu.pc + 2, cpu.pc + offset)) {
         cpu_cycle += 3;
@@ -191,7 +191,9 @@ void branch(unsigned char offset) {
     else {
         cpu_cycle += 4;
     }
-    cpu.pc += offset;
+    cpu.pc = (short) cpu.pc;
+    cpu.pc += (char) offset;
+    cpu.pc = (short) cpu.pc;
     return;
 }
 
@@ -332,9 +334,6 @@ void cpu_setup(unsigned char *instr, unsigned char *memory, int size) {
 //BRK impl: generates interrupt
 void brk() {
     //technically a 2 byte instruction, so next pc is pc+2
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
-
     cpu.pc += 2;
     cpu.brk = 1;
 
@@ -353,9 +352,6 @@ void brk() {
 
 //RTI: return from interrupt
 void rti() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
-
     decode_status(pop());
 
     cpu.pc = pop_word();
@@ -364,8 +360,6 @@ void rti() {
 
 //CLC impl: set carry flag to zero
 void clc() {
-    unsigned char args[2] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.cf = 0;
     cpu_cycle += 2;
     cpu.pc += 1;
@@ -374,8 +368,6 @@ void clc() {
 
 //SEC impl: set carry flag
 void sec() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.cf = 1;
 
     cpu_cycle += 2;
@@ -385,8 +377,6 @@ void sec() {
 
 //NOP
 void nop() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu_cycle += 2;
     cpu.pc += 1;
     return;
@@ -394,8 +384,6 @@ void nop() {
 
 //RTS: return from subroutine
 void rts() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.pc = pop_word() + 1;
     cpu_cycle += 6;
     return;
@@ -403,8 +391,6 @@ void rts() {
 
 //SEI: set id
 void sei() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.id = 1; 
     cpu_cycle += 2;
     cpu.pc += 1;
@@ -413,8 +399,6 @@ void sei() {
 
 //SED: set df
 void sed() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.dm = 1; 
     cpu_cycle += 2;
     cpu.pc += 1;
@@ -423,8 +407,6 @@ void sed() {
 
 //CLD: clear df
 void cld() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.dm = 0; 
     cpu_cycle += 2;
     cpu.pc += 1;
@@ -433,8 +415,6 @@ void cld() {
 
 //PHP: push status to stack
 void php() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     //bits 4 and 5 are always pushed as 1s
     push(encode_status() | 0x10);
     cpu_cycle += 3;
@@ -444,8 +424,6 @@ void php() {
 
 //PLA: sets acc to stack value
 void pla() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.acc = pop();
     set_flags_a();
     cpu.pc += 1;
@@ -455,8 +433,6 @@ void pla() {
 
 //PHA: push acc onto stack
 void pha() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     push(cpu.acc);
     cpu.pc += 1;
     cpu_cycle += 3;
@@ -465,8 +441,6 @@ void pha() {
 
 //PLP: set processor status from stack
 void plp() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     decode_status(pop());
     cpu.pc += 1;
     cpu_cycle += 4;
@@ -475,8 +449,6 @@ void plp() {
 
 //CLV: clear overflow flag
 void clv() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.of = 0;
     cpu.pc += 1;
     cpu_cycle += 2;
@@ -485,8 +457,6 @@ void clv() {
 
 //INX: increment x
 void inx() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.x += 1;
     set_flags_x();
     cpu.pc += 1;
@@ -496,8 +466,6 @@ void inx() {
 
 //INY: increment y
 void iny() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.y += 1;
     set_flags_y();
     cpu.pc += 1;
@@ -507,8 +475,6 @@ void iny() {
 
 //TAX: transfer acc to x
 void tax() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.x = cpu.acc;
     set_flags_x();
     cpu.pc += 1;
@@ -518,8 +484,6 @@ void tax() {
 
 //TAY: transfer acc to y
 void tay() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.y = cpu.acc;
     set_flags_y();
     cpu.pc += 1;
@@ -529,8 +493,6 @@ void tay() {
 
 //TYA: transfer y to acc
 void tya() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.acc = cpu.y;
     set_flags_a();
     cpu.pc += 1;
@@ -540,8 +502,6 @@ void tya() {
 
 //TXA: transfer x to acc
 void txa() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.acc = cpu.x;
     set_flags_a();
     cpu.pc += 1;
@@ -551,8 +511,6 @@ void txa() {
 
 //TXS: transfer x to sp
 void txs() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.sp = cpu.x;
     cpu.pc += 1;
     cpu_cycle += 2;
@@ -561,8 +519,6 @@ void txs() {
 
 //TSX: transfer sp to x
 void tsx() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.x = cpu.sp;
     set_flags_x();
     cpu.pc += 1;
@@ -572,8 +528,6 @@ void tsx() {
 
 //DEX: decrement x
 void dex() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.x -= 1;
     set_flags_x();
     cpu.pc += 1;
@@ -583,8 +537,6 @@ void dex() {
 
 //DEY: decrement y
 void dey() {
-    unsigned char args[1] = {mem[cpu.pc]};
-    print_cpu(args, 1);
     cpu.y -= 1;
     set_flags_y();
     cpu.pc += 1;
@@ -961,16 +913,35 @@ void dec(short addr) {
     cpu.neg = mem[addr] >> 7;
 }
 
+//LAX: load acc and x
+void lax(unsigned char data) {
+    lda(data);
+    ldx(data);
+}
+
+//SAX: store acc AND x
+void sax(short addr) {
+    mem[addr] = cpu.acc & cpu.x;
+}
+
+//DCP: dec mem and cmp
+void dcp(short addr) {
+    mem[addr]--;
+    cmp(mem[addr]);
+}
+
 int exec_instr() {
     unsigned char opcode = mem[cpu.pc];
     unsigned char args[3] = {opcode, mem[cpu.pc+1], mem[cpu.pc+2]};
     switch(parse_opcode(opcode)) {
+        short addr;
         //default
         case 0:
             cpu.pc++;
             break;
         //impl
         case 1:
+            print_cpu(args, 1);
             if(opcode == 0x00) {
                 brk();
             }
@@ -1043,6 +1014,36 @@ int exec_instr() {
             else if(opcode == 0x40) {
                 rti();
             }
+            else if(opcode == 0x1A) {
+                //nop
+                cpu.pc++;
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x3A) {
+                //nop
+                cpu.pc++;
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x5A) {
+                //nop
+                cpu.pc++;
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x7A) {
+                //nop
+                cpu.pc++;
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0xDA) {
+                //nop
+                cpu.pc++;
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0xFA) {
+                //nop
+                cpu.pc++;
+                cpu_cycle += 2;
+            }
             else {
                 cpu.pc++;
             }
@@ -1054,34 +1055,37 @@ int exec_instr() {
                 ldx(args[1]);
             }
             else if(opcode == 0xA0) {
-                ldy(mem[cpu.pc+1]);
+                ldy(args[1]);
             }
             else if(opcode == 0xA9) {
-                lda(mem[cpu.pc+1]);
+                lda(args[1]);
             }
             else if(opcode == 0x29) {
-                and(mem[cpu.pc+1]);
+                and(args[1]);
             }
             else if(opcode == 0x09) {
-                ora(mem[cpu.pc+1]);
+                ora(args[1]);
             }
             else if(opcode == 0x49) {
-                eor(mem[cpu.pc+1]);
+                eor(args[1]);
             }
             else if(opcode == 0x69) {
-                adc(mem[cpu.pc+1]);
+                adc(args[1]);
             }
             else if(opcode == 0xE9) {
-                adc(~mem[cpu.pc+1]);
+                adc(~args[1]);
             }
             else if(opcode == 0xC9) {
-                cmp(mem[cpu.pc+1]);
+                cmp(args[1]);
             }
             else if(opcode == 0xE0) {
-                cpx(mem[cpu.pc+1]);
+                cpx(args[1]);
             }
             else if(opcode == 0xC0) {
-                cpy(mem[cpu.pc+1]);
+                cpy(args[1]);
+            }
+            else if(opcode == 0xEB) {
+                sbc(args[1]);
             }
             cpu.pc += 2;
             cpu_cycle += 2;
@@ -1110,135 +1114,256 @@ int exec_instr() {
             break;
         //abs
         case 4:
-            short addr = args[2];
+            addr = args[2];
             addr <<= 8;
             addr |= args[1];
             print_cpu(args, 3);
             if(opcode == 0x4C) {
                 jmp(mem[cpu.pc+1], mem[cpu.pc+2]);
-                cpu_cycle += 3;
+                cpu_cycle -= 1;
+                cpu.pc -= 3;
             }
             else if(opcode == 0x20) {
                 jsr(mem[cpu.pc+1], mem[cpu.pc+2]);
-                cpu_cycle += 6;
+                cpu_cycle += 2;
+                cpu.pc -= 3;
             }
             else if(opcode == 0x8E) {
                 stx(addr);
-                cpu_cycle += 4;
-                cpu.pc += 3;
             }
             else if(opcode == 0x8C) {
                 sty(addr);
-                cpu_cycle += 4;
-                cpu.pc += 3;
+            }
+            else if(opcode == 0x8F) {
+                sax(addr);
             }
             else if(opcode == 0xEC) {
                 cpx(mem[addr]);
-                cpu_cycle += 4;
-                cpu.pc += 3;
             }
             else if(opcode == 0xCC) {
                 cpy(mem[addr]);
-                cpu_cycle += 4;
-                cpu.pc += 3;
             }
             else if(opcode == 0xAE) {
                 ldx(mem[addr]);
-                cpu_cycle += 4;
-                cpu.pc += 3;
             }
             else if(opcode == 0xAC) {
                 ldy(mem[addr]);
-                cpu_cycle += 4;
-                cpu.pc += 3;
             }
             else if(opcode == 0xAD) {
                 lda(mem[addr]);
-                cpu_cycle += 4;
-                cpu.pc += 3;
+            }
+            else if(opcode == 0xAF) {
+                lax(mem[addr]);
             }
             else if(opcode == 0x8D) {
                 sta(addr);
-                cpu_cycle += 4;
-                cpu.pc += 3;
             }
             else if(opcode == 0x2C) {
                 bit(addr);
-                cpu_cycle += 4;
-                cpu.pc += 3;
             }
             else if(opcode == 0x0D) {
                 ora(mem[addr]);
-                cpu_cycle += 4;
-                cpu.pc += 3;
             }
             else if(opcode == 0x2D) {
                 and(mem[addr]);
-                cpu_cycle += 4;
-                cpu.pc += 3;
             }
             else if(opcode == 0x4D) {
                 eor(mem[addr]);
-                cpu_cycle += 4;
-                cpu.pc += 3;
             }
             else if(opcode == 0xEE) {
                 inc(addr);
-                cpu_cycle += 6;
-                cpu.pc += 3;
+                cpu_cycle += 2;
             }
             else if(opcode == 0xCE) {
                 dec(addr);
-                cpu_cycle += 6;
-                cpu.pc += 3;
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0xCF) {
+                dcp(addr);
+                cpu_cycle += 2;
             }
             else if(opcode == 0x6D) {
                 adc(mem[addr]);
-                cpu_cycle += 4;
-                cpu.pc += 3;
             }
             else if(opcode == 0xED) {
                 sbc(mem[addr]);
-                cpu_cycle += 4;
-                cpu.pc += 3;
             }
             else if(opcode == 0xCD) {
                 cmp(mem[addr]);
-                cpu_cycle += 4;
-                cpu.pc += 3;
             }
             else if(opcode == 0x4E) {
                 mem[addr] = lsr(mem[addr]);
-                cpu_cycle += 6;
-                cpu.pc += 3;
+                cpu_cycle += 2;
             }
             else if(opcode == 0x0E) {
                 mem[addr] = asl(mem[addr]);
-                cpu_cycle += 6;
-                cpu.pc += 3;
+                cpu_cycle += 2;
             }
             else if(opcode == 0x6E) {
                 mem[addr] = ror(mem[addr]);
-                cpu_cycle += 6;
-                cpu.pc += 3;
+                cpu_cycle += 2;
             }
             else if(opcode == 0x2E) {
                 mem[addr] = rol(mem[addr]);
-                cpu_cycle += 6;
-                cpu.pc += 3;
+                cpu_cycle += 2;
             }
+            cpu_cycle += 4;
+            cpu.pc += 3;
             break;
         //abs_x
         case 5:
-            cpu.pc++;
+            print_cpu(args, 3); 
+            addr = args[2] << 8;
+            addr |= args[1];
+            if(!same_page(addr, addr + cpu.x)) {
+                cpu_cycle += 1;
+            }
+            addr += cpu.x;
+            if(opcode == 0xBD) {
+                lda(mem[addr]);
+            }
+            else if(opcode == 0x9D) {
+                sta(addr);
+                if(same_page(addr, addr - cpu.x)) {
+                    cpu_cycle += 1;
+                }
+            }
+            else if(opcode == 0xBC) {
+                ldy(mem[addr]);
+            }
+            else if(opcode == 0x1D) {
+                ora(mem[addr]);
+            }
+            else if(opcode == 0x3D) {
+                and(mem[addr]);
+            }
+            else if(opcode == 0x5D) {
+                eor(mem[addr]);
+            }
+            else if(opcode == 0x7D) {
+                adc(mem[addr]);
+            }
+            else if(opcode == 0xFD) {
+                sbc(mem[addr]);
+            }
+            else if(opcode == 0xDD) {
+                cmp(mem[addr]);
+            }
+            else if(opcode == 0x5E) {
+                mem[addr] = lsr(mem[addr]);
+                cpu_cycle += 2;
+                if(same_page(addr, addr - cpu.x)) {
+                    cpu_cycle += 1;
+                }
+            }
+            else if(opcode == 0x1E) {
+                mem[addr] = asl(mem[addr]);
+                cpu_cycle += 2;
+                if(same_page(addr, addr - cpu.x)) {
+                    cpu_cycle += 1;
+                }
+            }
+            else if(opcode == 0x7E) {
+                mem[addr] = ror(mem[addr]);
+                cpu_cycle += 2;
+                if(same_page(addr, addr - cpu.x)) {
+                    cpu_cycle += 1;
+                }
+            }
+            else if(opcode == 0x3E) {
+                mem[addr] = rol(mem[addr]);
+                cpu_cycle += 2;
+                if(same_page(addr, addr - cpu.x)) {
+                    cpu_cycle += 1;
+                }
+            }
+            else if(opcode == 0xFE) {
+                inc(addr);
+                cpu_cycle += 2;
+                if(same_page(addr, addr - cpu.x)) {
+                    cpu_cycle += 1;
+                }
+            }
+            else if(opcode == 0xDE) {
+                dec(addr);
+                cpu_cycle += 2;
+                if(same_page(addr, addr - cpu.x)) {
+                    cpu_cycle += 1;
+                }
+            }
+            else if(opcode == 0xDF) {
+                dcp(addr);
+                cpu_cycle += 2;
+                if(same_page(addr, addr - cpu.x)) {
+                    cpu_cycle += 1;
+                }
+            }
+            cpu.pc += 3;
+            cpu_cycle += 4;
             break;
         //abs_y
         case 6:
-            cpu.pc++;
+            print_cpu(args, 3); 
+            addr = args[2] << 8;
+            addr |= args[1];
+            if(!same_page(addr, addr + cpu.y)) {
+                cpu_cycle += 1;
+            }
+            addr += cpu.y;
+            if(opcode == 0xB9) {
+                lda(mem[addr]);
+            }
+            else if(opcode == 0xBE) {
+                ldx(mem[addr]);
+            }
+            else if(opcode == 0xBF) {
+                lax(mem[addr]);
+            }
+            else if(opcode == 0x99) {
+                sta(addr);
+                if(same_page(addr, addr - cpu.y)) {
+                    cpu_cycle += 1;
+                }
+            }
+            else if(opcode == 0x19) {
+                ora(mem[addr]);
+            }
+            else if(opcode == 0x39) {
+                and(mem[addr]);
+            }
+            else if(opcode == 0x59) {
+                eor(mem[addr]);
+            }
+            else if(opcode == 0x79) {
+                adc(mem[addr]);
+            }
+            else if(opcode == 0xF9) {
+                sbc(mem[addr]);
+            }
+            else if(opcode == 0xD9) {
+                cmp(mem[addr]);
+            }
+            else if(opcode == 0xDB) {
+                dcp(addr);
+                cpu_cycle += 2;
+            }
+            else { 
+                cpu.pc++;
+            }
+            cpu.pc += 3;
+            cpu_cycle += 4;
             break;
         //ind
         case 7:
-            cpu.pc++;
+            print_cpu(args, 3);
+            addr = (args[2] << 8) | args[1];
+            short addr_hi = (args[2] << 8) | args[1];
+            short addr_lo = (args[2] << 8) | (unsigned char)(args[1] + 1);
+            //printf("addr: %x\thi: %x\tlo: %x\n", addr, addr_hi, addr_lo);
+            if(opcode == 0x6C) {
+                jmp(mem[addr_hi], mem[addr_lo]); 
+            }
+            cpu_cycle += 5;
             break;
         //x_ind
         case 8:
@@ -1250,6 +1375,9 @@ int exec_instr() {
             }
             else if(opcode == 0x81) {
                 sta(addr);
+            }
+            else if(opcode == 0x83) {
+                sax(addr);
             }
             else if(opcode == 0x01) {
                 ora(mem[addr]);
@@ -1269,12 +1397,65 @@ int exec_instr() {
             else if(opcode == 0xC1) {
                 cmp(mem[addr]);
             }
+            else if(opcode == 0xA3) {
+                lax(mem[addr]);
+            }
+            else if(opcode == 0xC3) {
+                dcp(addr);
+                cpu_cycle += 2;
+            }
             cpu.pc += 2;
             cpu_cycle += 6;
             break;
         //ind_y
         case 9:
-            cpu.pc++;
+            print_cpu(args, 2);
+            int int_addr = mem[(args[1] + 1) % 256] << 8;
+            int_addr |= mem[args[1]];
+            if(!same_page(int_addr, int_addr + cpu.y)) {
+                cpu_cycle += 1;
+            }
+            int_addr += cpu.y;
+            addr = (short) int_addr;
+            if(opcode == 0xB1) {
+                lda(mem[addr]);
+            }
+            if(opcode == 0x91) {
+                sta(addr);
+                if(same_page(int_addr, int_addr - cpu.y)) {
+                    cpu_cycle += 1;
+                }
+            }
+            else if(opcode == 0x11) {
+                ora(mem[addr]);
+            }
+            else if(opcode == 0x31) {
+                and(mem[addr]);
+            }
+            else if(opcode == 0x51) {
+                eor(mem[addr]);
+            }
+            else if(opcode == 0x71) {
+                adc(mem[addr]);
+            }
+            else if(opcode == 0xF1) {
+                sbc(mem[addr]);
+            }
+            else if(opcode == 0xD1) {
+                cmp(mem[addr]);
+            }
+            else if(opcode == 0xB3) {
+                lax(mem[addr]);
+            }
+            else if(opcode == 0xD3) {
+                dcp(addr);
+                if(same_page(int_addr, int_addr - cpu.y)) {
+                    cpu_cycle += 1;
+                }
+                cpu_cycle += 2;
+            }
+            cpu_cycle += 5;
+            cpu.pc += 2;
             break;
         //rel
         case 10:
@@ -1314,11 +1495,14 @@ int exec_instr() {
             if(opcode == 0x86) {
                 stx(addr);
             }
-            if(opcode == 0x84) {
+            else if(opcode == 0x84) {
                 sty(addr);
             }
             else if(opcode == 0x85) {
                 sta(addr);
+            }
+            else if(opcode == 0x87) {
+                sax(addr);
             }
             else if(opcode == 0x24) {
                 bit(addr);
@@ -1331,6 +1515,9 @@ int exec_instr() {
             }
             else if(opcode == 0xA4) {
                 ldy(mem[addr]);
+            }
+            else if(opcode == 0xA7) {
+                lax(mem[addr]);
             }
             else if(opcode == 0x05) {
                 ora(mem[addr]);
@@ -1349,6 +1536,10 @@ int exec_instr() {
             }
             else if(opcode == 0xC5) {
                 cmp(mem[addr]);
+            }
+            else if(opcode == 0xC7) {
+                dcp(addr);
+                cpu_cycle += 2;
             }
             else if(opcode == 0xE4) {
                 cpx(mem[addr]);
@@ -1385,11 +1576,87 @@ int exec_instr() {
             break;
         //zpg_x
         case 12:
-            cpu.pc++;
+            print_cpu(args, 2);
+            addr = (unsigned char) (cpu.x + args[1]);
+            if(opcode == 0xB4) {
+                ldy(mem[addr]);
+            }
+            else if(opcode == 0xB5) {
+                lda(mem[addr]);
+            }
+            else if(opcode == 0x94) {
+                sty(addr);
+            }
+            else if(opcode == 0x95) {
+                sta(addr);
+            }
+            else if(opcode == 0x15) {
+                ora(mem[addr]);
+            }
+            else if(opcode == 0x35) {
+                and(mem[addr]);
+            }
+            else if(opcode == 0x55) {
+                eor(mem[addr]);
+            }
+            else if(opcode == 0x75) {
+                adc(mem[addr]);
+            }
+            else if(opcode == 0xF5) {
+                sbc(mem[addr]);
+            }
+            else if(opcode == 0xD5) {
+                cmp(mem[addr]);
+            }
+            else if(opcode == 0xD7) {
+                dcp(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x56) {
+                mem[addr] = lsr(mem[addr]);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x16) {
+                mem[addr] = asl(mem[addr]);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x76) {
+                mem[addr] = ror(mem[addr]);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x36) {
+                mem[addr] = rol(mem[addr]);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0xF6) {
+                inc(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0xD6) {
+                dec(addr);
+                cpu_cycle += 2;
+            }
+            cpu.pc += 2;
+            cpu_cycle += 4;
             break;
         //zpg_y
         case 13:
-            cpu.pc++;
+            print_cpu(args, 2);
+            addr = (unsigned char) (cpu.y + args[1]);
+            if(opcode == 0xB6) {
+                ldx(mem[addr]);
+            }
+            else if(opcode == 0xB7) {
+                lax(mem[addr]);
+            }
+            else if(opcode == 0x96) {
+                stx(addr);
+            }
+            else if(opcode == 0x97) {
+                sax(addr);
+            }
+            cpu.pc += 2;
+            cpu_cycle += 4;
             break;
     }
     return 0;

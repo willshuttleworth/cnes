@@ -1,4 +1,4 @@
-function that returns 16bit address from two bytes
+add ins for all addressing modes
 
 how does a program end?
 
