@@ -4,7 +4,6 @@ CC = gcc
 CFLAGS = -Wall -g
 
 OUTDIR = .
-DATADIR = ./data
 SUBDIR = cpu ppu parser
 DIR_OBJ = ./obj
 

@@ -624,8 +624,9 @@ void sbc(unsigned char data) {
     short result = cpu.acc + (unsigned char) ~data + (unsigned char) cpu.cf;
     
     cpu.cf = result > 0xFF;
+    result = (unsigned char) result;
     //setting overflow
-    if((cpu.acc >> 7) == (unsigned char) ~data >> 7) {
+    if((cpu.acc >> 7) == ((unsigned char) (~data)) >> 7) {
         if((result >> 7) != (cpu.acc >> 7)) {
             cpu.of = cpu.acc  >> 7;
         }
@@ -930,6 +931,18 @@ void dcp(short addr) {
     cmp(mem[addr]);
 }
 
+//ISC: inc mem and sbc
+void isc(short addr) {
+    mem[addr]++;
+    sbc(mem[addr]);
+}
+
+//SLO: asl mem and ora
+void slo(short addr) {
+    mem[addr] = asl(mem[addr]);
+    ora(mem[addr]);
+}
+
 int exec_instr() {
     unsigned char opcode = mem[cpu.pc];
     unsigned char args[3] = {opcode, mem[cpu.pc+1], mem[cpu.pc+2]};
@@ -1182,6 +1195,10 @@ int exec_instr() {
                 dcp(addr);
                 cpu_cycle += 2;
             }
+            else if(opcode == 0xEF) {
+                isc(addr);
+                cpu_cycle += 2;
+            }
             else if(opcode == 0x6D) {
                 adc(mem[addr]);
             }
@@ -1205,6 +1222,10 @@ int exec_instr() {
             }
             else if(opcode == 0x2E) {
                 mem[addr] = rol(mem[addr]);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x0F) {
+                slo(addr);
                 cpu_cycle += 2;
             }
             cpu_cycle += 4;
@@ -1298,6 +1319,20 @@ int exec_instr() {
                     cpu_cycle += 1;
                 }
             }
+            else if(opcode == 0xFF) {
+                isc(addr);
+                cpu_cycle += 2;
+                if(same_page(addr, addr - cpu.x)) {
+                    cpu_cycle += 1;
+                }
+            }
+            else if(opcode == 0x1F) {
+                slo(addr);
+                cpu_cycle += 2;
+                if(same_page(addr, addr - cpu.x)) {
+                    cpu_cycle += 1;
+                }
+            }
             cpu.pc += 3;
             cpu_cycle += 4;
             break;
@@ -1345,6 +1380,14 @@ int exec_instr() {
             }
             else if(opcode == 0xDB) {
                 dcp(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0xFB) {
+                isc(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x1B) {
+                slo(addr);
                 cpu_cycle += 2;
             }
             else { 
@@ -1404,6 +1447,14 @@ int exec_instr() {
                 dcp(addr);
                 cpu_cycle += 2;
             }
+            else if(opcode == 0xE3) {
+                isc(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x03) {
+                slo(addr);
+                cpu_cycle += 2;
+            }
             cpu.pc += 2;
             cpu_cycle += 6;
             break;
@@ -1449,6 +1500,20 @@ int exec_instr() {
             }
             else if(opcode == 0xD3) {
                 dcp(addr);
+                if(same_page(int_addr, int_addr - cpu.y)) {
+                    cpu_cycle += 1;
+                }
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0xF3) {
+                isc(addr);
+                if(same_page(int_addr, int_addr - cpu.y)) {
+                    cpu_cycle += 1;
+                }
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x13) {
+                slo(addr);
                 if(same_page(int_addr, int_addr - cpu.y)) {
                     cpu_cycle += 1;
                 }
@@ -1541,6 +1606,10 @@ int exec_instr() {
                 dcp(addr);
                 cpu_cycle += 2;
             }
+            else if(opcode == 0xE7) {
+                isc(addr);
+                cpu_cycle += 2;
+            }
             else if(opcode == 0xE4) {
                 cpx(mem[addr]);
             }
@@ -1569,6 +1638,10 @@ int exec_instr() {
             }
             else if(opcode == 0x26) {
                 mem[addr] = rol(mem[addr]);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x07) {
+                slo(addr);
                 cpu_cycle += 2;
             }
             cpu.pc += 2;
@@ -1612,6 +1685,10 @@ int exec_instr() {
                 dcp(addr);
                 cpu_cycle += 2;
             }
+            else if(opcode == 0xF7) {
+                isc(addr);
+                cpu_cycle += 2;
+            }
             else if(opcode == 0x56) {
                 mem[addr] = lsr(mem[addr]);
                 cpu_cycle += 2;
@@ -1634,6 +1711,10 @@ int exec_instr() {
             }
             else if(opcode == 0xD6) {
                 dec(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x17) {
+                slo(addr);
                 cpu_cycle += 2;
             }
             cpu.pc += 2;
