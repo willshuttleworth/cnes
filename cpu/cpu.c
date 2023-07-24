@@ -174,7 +174,6 @@ void print_cpu(unsigned char *args, int len) {
 
 //are addresses on same page?
 int same_page(short address1, short address2) {
-    
     if(address1 >> 8 == address2 >> 8) {
         return 1;
     } 
@@ -185,7 +184,7 @@ int same_page(short address1, short address2) {
 
 void branch(char offset) {
     //3 or 4 cycles depending on page boundary
-    if(same_page(cpu.pc + 2, cpu.pc + offset)) {
+    if(same_page(cpu.pc + 2, cpu.pc + 2 + offset)) {
         cpu_cycle += 3;
     }
     else {
@@ -386,6 +385,9 @@ void nop() {
 void rts() {
     cpu.pc = pop_word() + 1;
     cpu_cycle += 6;
+    if(cpu.pc == 0x01) {
+        exit(0);
+    }
     return;
 }
 
@@ -943,6 +945,24 @@ void slo(short addr) {
     ora(mem[addr]);
 }
 
+//RLA: rol mem and AND
+void rla(short addr) {
+    mem[addr] = rol(mem[addr]);
+    and(mem[addr]);
+}
+
+//SRE: lsr mem and eor
+void sre(short addr) {
+    mem[addr] = lsr(mem[addr]);
+    eor(mem[addr]);
+}
+
+//RRA: ror mem and adc
+void rra(short addr) {
+    mem[addr] = ror(mem[addr]);
+    adc(mem[addr]);
+}
+
 int exec_instr() {
     unsigned char opcode = mem[cpu.pc];
     unsigned char args[3] = {opcode, mem[cpu.pc+1], mem[cpu.pc+2]};
@@ -1228,6 +1248,18 @@ int exec_instr() {
                 slo(addr);
                 cpu_cycle += 2;
             }
+            else if(opcode == 0x2F) {
+                rla(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x4F) {
+                sre(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x6F) {
+                rra(addr);
+                cpu_cycle += 2;
+            }
             cpu_cycle += 4;
             cpu.pc += 3;
             break;
@@ -1333,6 +1365,27 @@ int exec_instr() {
                     cpu_cycle += 1;
                 }
             }
+            else if(opcode == 0x3F) {
+                rla(addr);
+                cpu_cycle += 2;
+                if(same_page(addr, addr - cpu.x)) {
+                    cpu_cycle += 1;
+                }
+            }
+            else if(opcode == 0x5F) {
+                sre(addr);
+                cpu_cycle += 2;
+                if(same_page(addr, addr - cpu.x)) {
+                    cpu_cycle += 1;
+                }
+            }
+            else if(opcode == 0x7F) {
+                rra(addr);
+                cpu_cycle += 2;
+                if(same_page(addr, addr - cpu.x)) {
+                    cpu_cycle += 1;
+                }
+            }
             cpu.pc += 3;
             cpu_cycle += 4;
             break;
@@ -1390,7 +1443,19 @@ int exec_instr() {
                 slo(addr);
                 cpu_cycle += 2;
             }
-            else { 
+            else if(opcode == 0x3B) {
+                rla(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x5B) {
+                sre(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x7B) {
+                rra(addr);
+                cpu_cycle += 2;
+            }
+            else {
                 cpu.pc++;
             }
             cpu.pc += 3;
@@ -1455,6 +1520,18 @@ int exec_instr() {
                 slo(addr);
                 cpu_cycle += 2;
             }
+            else if(opcode == 0x23) {
+                rla(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x43) {
+                sre(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x63) {
+                rra(addr);
+                cpu_cycle += 2;
+            }
             cpu.pc += 2;
             cpu_cycle += 6;
             break;
@@ -1514,6 +1591,27 @@ int exec_instr() {
             }
             else if(opcode == 0x13) {
                 slo(addr);
+                if(same_page(int_addr, int_addr - cpu.y)) {
+                    cpu_cycle += 1;
+                }
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x33) {
+                rla(addr);
+                if(same_page(int_addr, int_addr - cpu.y)) {
+                    cpu_cycle += 1;
+                }
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x53) {
+                sre(addr);
+                if(same_page(int_addr, int_addr - cpu.y)) {
+                    cpu_cycle += 1;
+                }
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x73) {
+                rra(addr);
                 if(same_page(int_addr, int_addr - cpu.y)) {
                     cpu_cycle += 1;
                 }
@@ -1644,6 +1742,18 @@ int exec_instr() {
                 slo(addr);
                 cpu_cycle += 2;
             }
+            else if(opcode == 0x27) {
+                rla(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x47) {
+                sre(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x67) {
+                rra(addr);
+                cpu_cycle += 2;
+            }
             cpu.pc += 2;
             cpu_cycle += 3;
             break;
@@ -1715,6 +1825,18 @@ int exec_instr() {
             }
             else if(opcode == 0x17) {
                 slo(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x37) {
+                rla(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x57) {
+                sre(addr);
+                cpu_cycle += 2;
+            }
+            else if(opcode == 0x77) {
+                rra(addr);
                 cpu_cycle += 2;
             }
             cpu.pc += 2;
