@@ -1077,9 +1077,6 @@ int exec_instr() {
                 cpu.pc++;
                 cpu_cycle += 2;
             }
-            else {
-                cpu.pc++;
-            }
             break;
         //imm
         case 2:
@@ -1455,9 +1452,6 @@ int exec_instr() {
                 rra(addr);
                 cpu_cycle += 2;
             }
-            else {
-                cpu.pc++;
-            }
             cpu.pc += 3;
             cpu_cycle += 4;
             break;
@@ -1646,9 +1640,6 @@ int exec_instr() {
             }
             else if(opcode == 0x30) {
                 bmi(mem[cpu.pc+1]);
-            }
-            else {
-                cpu.pc++;
             }
             break;
         //zpg

@@ -26,12 +26,18 @@ int main(int argc, char **argv) {
 
         //find number of 16kib blocks
         int num_blocks = parse_blocks(file);
-        //read each instruction into an array
+        
+        //allocate memory for cpu/ppu
         unsigned char *instructions = parse_instructions(file);
         unsigned char *mem = malloc(ADDRESS_SPACE);
-        //pass rom info to cpu
+        unsigned char *chrom = malloc(CHROM_SIZE);
+        unsigned char *vram = malloc(VRAM_SIZE);
+        unsigned char *palette = malloc(PALETTE_SIZE);
+        unsigned char *oam = malloc(OAM_SIZE);
+        
+        //pass rom info to cpu and ppu
         cpu_setup(instructions, mem, num_blocks);
-
+        ppu_setup(instructions, mem, chrom, vram, palette, oam); 
         //main execution loop. cpu will pass next pc as return val of execution instruction halt will be encoded as null/negative val
         //loop while cpu not halted/interrupted
         //cpu has access to instruction byte array and gets next instruction independent of main
@@ -61,8 +67,14 @@ int main(int argc, char **argv) {
         }
         */
         
+        //free cpu/ppu mem
         free(instructions);
         free(mem);
+        free(chrom);
+        free(vram);
+        free(palette);
+        free(oam);
+
         fclose(file);
     }
     return 0;

@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h> //fstat
+#include "../ppu/ppu.h"
 
-#define ROM_SIZE 16384  //2^14
+#define PRG_ROM_SIZE 16384  //2^14
+#define CHR_ROM_SIZE 8192  //2^13
 
 #define IMPL_LEN 43
 #define IMM_LEN 24
@@ -165,7 +167,7 @@ unsigned char *parse_instructions(FILE *file) {
     int len = num_bytes - sizeof(Header);
     unsigned char *instructions = malloc(len);
     
-    //read all bytes of rom into an array
+    //read all bytes of prgrom into an array
     int i = 0;
     while(!feof(file)) {
         fread(&instructions[i], sizeof(char), 1, file); 
@@ -175,12 +177,13 @@ unsigned char *parse_instructions(FILE *file) {
 }
 
 //load instructions into correct memory addresses, setup interrupt vector
+//load chrom from file into chrom array
 //size is number of 16kib blocks, so 1 or 2
 void load(unsigned char *instructions, unsigned char *mem, int size) {
     //if size is 1, copy from 0x8000 to 0xBFFF and 0xC000 to 0x10000
     //if size is 2, copy from 0x8000 to 0x10000
     if(size == 1) {
-        for(int i = 0; i < ROM_SIZE; i++) {
+        for(int i = 0; i < PRG_ROM_SIZE; i++) {
             mem[0x8000 + i] = instructions[i];
             mem[0xC000 + i] = instructions[i];
         }
@@ -190,7 +193,7 @@ void load(unsigned char *instructions, unsigned char *mem, int size) {
         return;
     }
     else if(size == 2) {
-        for(int i = 0; i < (ROM_SIZE * 2); i++) {
+        for(int i = 0; i < (PRG_ROM_SIZE * 2); i++) {
             mem[0x8000 + i] = instructions[i];
         } 
         //initialize interupt vector
@@ -201,5 +204,11 @@ void load(unsigned char *instructions, unsigned char *mem, int size) {
     else {
         puts("invalid number of prg rom blocks");
         exit(0);
+    }
+}
+
+void load_ppu(unsigned char *instructions, unsigned char *chrom) {
+    for(int i = PRG_ROM_SIZE; i < PRG_ROM_SIZE + CHR_ROM_SIZE; i++) {
+        chrom[i - PRG_ROM_SIZE] = instructions[i];
     }
 }
