@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <SDL2/SDL.h>
 
 #include "parser/parser.h"
 #include "cpu/cpu.h"

@@ -1,1 +1,4 @@
 test step in makefile
+
+1. implement controller/input
+2. ppu

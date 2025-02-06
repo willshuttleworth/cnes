@@ -1,4 +1,4 @@
-TARGET = main
+TARGET = cnes 
 
 CC = gcc
 CFLAGS = -Wall -g
@@ -6,6 +6,9 @@ CFLAGS = -Wall -g
 OUTDIR = .
 SUBDIR = cpu ppu parser
 DIR_OBJ = ./obj
+
+CFLAGS += $(shell pkg-config --cflags sdl2)
+LDFLAGS += $(shell pkg-config --libs sdl2)
 
 INCS = $(wildcard *.h $(foreach fd, $(SUBDIR), $(fd)/*.h))
 SRCS = $(wildcard *.c $(foreach fd, $(SUBDIR), $(fd)/*.c))
@@ -16,7 +19,7 @@ INC_DIRS = $(addprefix -I, $(SUBDIR))
 .PHONY: clean echoes
 
 $(TARGET): $(OBJS)
-	$(CC) -o $(OUTDIR)/$@ $(OBJS)
+	$(CC) -o $(OUTDIR)/$@ $(OBJS) $(LDFLAGS)
 
 $(DIR_OBJ)/%.o: %.c $(INCS)
 	mkdir -p $(@D)
