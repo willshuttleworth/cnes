@@ -13,6 +13,14 @@
 int cpu_cycle;
 
 int main(int argc, char **argv) {
+    //sdl setup
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Event event;
+    SDL_Window* window = SDL_CreateWindow("Keyboard Input",
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        640, 480, 0);
+    int quit = 0;
+
     //read rom from cmdline arg
     if(argc != 2) {
         printf("usage:\t./main <path/to/rom/>\n");
@@ -46,7 +54,7 @@ int main(int argc, char **argv) {
         int ret = 0;
 
         //run 7 cycle startup instruction first (add a specific cpu function for that)
-        while(ret != -1) {
+        while(quit == 0 && ret != -1) {
             //operands[0] = number of operands
             //operands[1..num_operands] = bytes
             /*
@@ -58,6 +66,37 @@ int main(int argc, char **argv) {
                 ret = exec_instr();
             }
             main_cycle++;
+            //handle input
+            while (SDL_PollEvent(&event)) {
+                switch (event.type) {
+                    case SDL_QUIT:
+                        quit = 1;
+                        break;
+
+                    case SDL_KEYDOWN:
+                        switch (event.key.keysym.sym) {
+                            case SDLK_ESCAPE:
+                                quit = 1;
+                                break;
+                            case SDLK_LEFT:
+                                printf("Left arrow pressed\n");
+                                break;
+                            case SDLK_RIGHT:
+                                printf("Right arrow pressed\n");
+                                break;
+                            case SDLK_z:
+                                printf("Z pressed\n");
+                                break;
+                            case SDLK_x:
+                                printf("X pressed\n");
+                                break;
+                        }
+                        break;
+                    case SDL_KEYUP:
+                        printf("no key pressed\n");
+                }
+            }
+            SDL_Delay(16);
         }
      
         /*
@@ -68,7 +107,9 @@ int main(int argc, char **argv) {
         }
         */
         
-        //free cpu/ppu mem
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+
         free(instructions);
         free(mem);
         free(chrom);

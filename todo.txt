@@ -1,4 +1,11 @@
 test step in makefile
 
 1. implement controller/input
+    - pressing key gets handled in main game loop
+    - event is passed to controller function
+        - this function has switch case for event 
+        - memory is updated based on what key press was registered
+    - how to make data accessible by cpu?
+        - dont have bus anymore
+        - controller needs to write to shared memory
 2. ppu

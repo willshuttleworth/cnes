@@ -1,7 +1,7 @@
 *.o
 *.txt
 *.dSYM
-main
+cnes
 hex
 test/donkeykong.nes
 !todo.txt
