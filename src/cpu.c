@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "../parser/parser.h"
+#include "parser.h"
+#include "bus.h"
 
 #define STACK_TOP 0x1FF
 #define PAGE_SIZE 100
@@ -40,7 +41,6 @@ typedef struct CPU {
 
 //stack is 0x100 to 0x1FF, next stack address is mem[STACK_TOP - stack_ptr]
 //stack grows down from STACK_TOP(0x1FF)
-unsigned char *mem;
 extern int cpu_cycle;
 
 CPU cpu = { 
@@ -245,8 +245,7 @@ void push(unsigned char byte) {
         puts("stack overflow");
         return;
     }
-
-    mem[cpu.sp + 0x100] = byte;
+    bus_write(cpu.sp + 0x100, byte);
     cpu.sp -= 1;
 }
 
@@ -264,7 +263,7 @@ unsigned char pop() {
     }
     
     cpu.sp += 1;
-    return mem[cpu.sp + 0x100];
+    return bus_read(cpu.sp + 0x100);
 }
 
 short pop_word() {
@@ -282,7 +281,7 @@ void print_stack() {
     }
     printf("stack: ");
     for(short i = 0xFF; i > 0; i--) {
-        printf("%x ", mem[0x100 + i]);
+        printf("%x ", bus_read(0x100 + i));
     }
     printf("\n");
 }
@@ -316,17 +315,13 @@ void stack_test() {
     print_stack();
 }
 
-void cpu_setup(unsigned char *instr, unsigned char *memory, int size) {
-    mem = memory;
-    //load instructions into correct spot in memory
-    load(instr, mem, size);
-
+void cpu_setup() {
     push(0);
     push(0);
     //take 7 cycles to set pc to value in mem[0xFFFC/D]
-    cpu.pc = mem[0xFFFD];     
+    cpu.pc = bus_read(0xFFFD);
     cpu.pc <<= 8;
-    cpu.pc |= mem[0xFFFC];
+    cpu.pc |= bus_read(0xFFFC);
     cpu_cycle = 7;
 }
 
@@ -339,11 +334,10 @@ void brk() {
     //push status reg, pc lo byte, pc hi byte onto stack (in that order)
     push((unsigned char)cpu.pc); 
     push((unsigned char)(cpu.pc >> 8)); 
-    //set hi pc to val at 0xFFFF, lo pc to val at 0xFFFE (which is lo/hi of pc?)
-    //what is at these memory addresses? when do they get loaded?
-    cpu.pc = mem[0xFFFF];
+
+    cpu.pc = bus_read(0xFFFF);
     cpu.pc <<= 8;
-    cpu.pc |= mem[0xFFFE];
+    cpu.pc |= bus_read(0xFFFE);
     cpu_cycle += 7;
     cpu.brk = 0; 
     return;
@@ -825,36 +819,36 @@ void bmi(unsigned char offset) {
 //STX: store value in register x at addr
 void stx(short addr) {
     //store x 
-    mem[addr] = cpu.x;
+    bus_write(addr, cpu.x);
     return;
 }
 
 //STY: store value in register y at addr
 void sty(short addr) {
     //store y
-    mem[addr] = cpu.y;
+    bus_write(addr, cpu.y);
     return;
 }
 
 //STA: store value in register acc at addr
 void sta(short addr) {
     //store acc 
-    mem[addr] = cpu.acc;
+    bus_write(addr, cpu.acc);
     return;
 }
 
 //BIT zpg: read mem value at address and set status flags and also logical and register acc and mem value to set zf
 void bit(short addr) {
     //set zf if result of AND is zero 
-    if((cpu.acc & mem[addr]) == 0) {
+    if((cpu.acc & bus_read(addr)) == 0) {
         cpu.zf = 1;
     }
     else {
         cpu.zf = 0;
     }
     //set status flags based on bits at mem location
-    cpu.neg = mem[addr] >> 7;
-    cpu.of = (mem[addr] >> 6) & 1;
+    cpu.neg = bus_read(addr) >> 7;
+    cpu.of = (bus_read(addr) >> 6) & 1;
     return;
 }
 
@@ -904,16 +898,16 @@ unsigned char rol(unsigned char data) {
 
 //INC: increment memory
 void inc(short addr) {
-    mem[addr] += 1;
-    cpu.zf = mem[addr] == 0;
-    cpu.neg = mem[addr] >> 7;
+    bus_write(addr, bus_read(addr) + 1);
+    cpu.zf = bus_read(addr) == 0;
+    cpu.neg = bus_read(addr) >> 7;
 }
 
 //DEC: decrement memory
 void dec(short addr) {
-    mem[addr] -= 1;
-    cpu.zf = mem[addr] == 0;
-    cpu.neg = mem[addr] >> 7;
+    bus_write(addr, bus_read(addr) - 1);
+    cpu.zf = bus_read(addr) == 0;
+    cpu.neg = bus_read(addr) >> 7;
 }
 
 //LAX: load acc and x
@@ -924,48 +918,53 @@ void lax(unsigned char data) {
 
 //SAX: store acc AND x
 void sax(short addr) {
-    mem[addr] = cpu.acc & cpu.x;
+    bus_write(addr, cpu.acc & cpu.x);
 }
 
 //DCP: dec mem and cmp
 void dcp(short addr) {
-    mem[addr]--;
-    cmp(mem[addr]);
+    bus_write(addr, bus_read(addr) - 1);
+    cmp(bus_read(addr));
 }
 
 //ISC: inc mem and sbc
 void isc(short addr) {
-    mem[addr]++;
-    sbc(mem[addr]);
+    bus_write(addr, bus_read(addr) + 1);
+    sbc(bus_read(addr));
 }
 
 //SLO: asl mem and ora
 void slo(short addr) {
-    mem[addr] = asl(mem[addr]);
-    ora(mem[addr]);
+    bus_write(addr, asl(bus_read(addr)));
+    ora(bus_read(addr));
 }
 
 //RLA: rol mem and AND
 void rla(short addr) {
-    mem[addr] = rol(mem[addr]);
-    and(mem[addr]);
+    bus_write(addr, rol(bus_read(addr)));
+    and(bus_read(addr));
 }
 
 //SRE: lsr mem and eor
 void sre(short addr) {
-    mem[addr] = lsr(mem[addr]);
-    eor(mem[addr]);
+    bus_write(addr, lsr(bus_read(addr)));
+    eor(bus_read(addr));
 }
 
 //RRA: ror mem and adc
 void rra(short addr) {
-    mem[addr] = ror(mem[addr]);
-    adc(mem[addr]);
+    bus_write(addr, ror(bus_read(addr)));
+    adc(bus_read(addr));
 }
 
 int exec_instr() {
+    /* 
     unsigned char opcode = mem[cpu.pc];
     unsigned char args[3] = {opcode, mem[cpu.pc+1], mem[cpu.pc+2]};
+    */
+    unsigned char opcode = bus_read(cpu.pc);
+    unsigned char args[3] = {opcode, bus_read(cpu.pc + 1), bus_read(cpu.pc + 2)};
+
     switch(parse_opcode(opcode)) {
         short addr;
         //default
@@ -1149,12 +1148,12 @@ int exec_instr() {
             addr |= args[1];
             print_cpu(args, 3);
             if(opcode == 0x4C) {
-                jmp(mem[cpu.pc+1], mem[cpu.pc+2]);
+                jmp(bus_read(cpu.pc + 1), bus_read(cpu.pc + 2));
                 cpu_cycle -= 1;
                 cpu.pc -= 3;
             }
             else if(opcode == 0x20) {
-                jsr(mem[cpu.pc+1], mem[cpu.pc+2]);
+                jsr(bus_read(cpu.pc + 1), bus_read(cpu.pc + 2));
                 cpu_cycle += 2;
                 cpu.pc -= 3;
             }
@@ -1168,22 +1167,22 @@ int exec_instr() {
                 sax(addr);
             }
             else if(opcode == 0xEC) {
-                cpx(mem[addr]);
+                cpx(bus_read(addr));
             }
             else if(opcode == 0xCC) {
-                cpy(mem[addr]);
+                cpy(bus_read(addr));
             }
             else if(opcode == 0xAE) {
-                ldx(mem[addr]);
+                ldx(bus_read(addr));
             }
             else if(opcode == 0xAC) {
-                ldy(mem[addr]);
+                ldy(bus_read(addr));
             }
             else if(opcode == 0xAD) {
-                lda(mem[addr]);
+                lda(bus_read(addr));
             }
             else if(opcode == 0xAF) {
-                lax(mem[addr]);
+                lax(bus_read(addr));
             }
             else if(opcode == 0x8D) {
                 sta(addr);
@@ -1192,13 +1191,13 @@ int exec_instr() {
                 bit(addr);
             }
             else if(opcode == 0x0D) {
-                ora(mem[addr]);
+                ora(bus_read(addr));
             }
             else if(opcode == 0x2D) {
-                and(mem[addr]);
+                and(bus_read(addr));
             }
             else if(opcode == 0x4D) {
-                eor(mem[addr]);
+                eor(bus_read(addr));
             }
             else if(opcode == 0xEE) {
                 inc(addr);
@@ -1217,28 +1216,28 @@ int exec_instr() {
                 cpu_cycle += 2;
             }
             else if(opcode == 0x6D) {
-                adc(mem[addr]);
+                adc(bus_read(addr));
             }
             else if(opcode == 0xED) {
-                sbc(mem[addr]);
+                sbc(bus_read(addr));
             }
             else if(opcode == 0xCD) {
-                cmp(mem[addr]);
+                cmp(bus_read(addr));
             }
             else if(opcode == 0x4E) {
-                mem[addr] = lsr(mem[addr]);
+                bus_write(addr, lsr(bus_read(addr)));
                 cpu_cycle += 2;
             }
             else if(opcode == 0x0E) {
-                mem[addr] = asl(mem[addr]);
+                bus_write(addr, asl(bus_read(addr)));
                 cpu_cycle += 2;
             }
             else if(opcode == 0x6E) {
-                mem[addr] = ror(mem[addr]);
+                bus_write(addr, ror(bus_read(addr)));
                 cpu_cycle += 2;
             }
             else if(opcode == 0x2E) {
-                mem[addr] = rol(mem[addr]);
+                bus_write(addr, rol(bus_read(addr)));
                 cpu_cycle += 2;
             }
             else if(opcode == 0x0F) {
@@ -1270,7 +1269,7 @@ int exec_instr() {
             }
             addr += cpu.x;
             if(opcode == 0xBD) {
-                lda(mem[addr]);
+                lda(bus_read(addr));
             }
             else if(opcode == 0x9D) {
                 sta(addr);
@@ -1279,49 +1278,49 @@ int exec_instr() {
                 }
             }
             else if(opcode == 0xBC) {
-                ldy(mem[addr]);
+                ldy(bus_read(addr));
             }
             else if(opcode == 0x1D) {
-                ora(mem[addr]);
+                ora(bus_read(addr));
             }
             else if(opcode == 0x3D) {
-                and(mem[addr]);
+                and(bus_read(addr));
             }
             else if(opcode == 0x5D) {
-                eor(mem[addr]);
+                eor(bus_read(addr));
             }
             else if(opcode == 0x7D) {
-                adc(mem[addr]);
+                adc(bus_read(addr));
             }
             else if(opcode == 0xFD) {
-                sbc(mem[addr]);
+                sbc(bus_read(addr));
             }
             else if(opcode == 0xDD) {
-                cmp(mem[addr]);
+                cmp(bus_read(addr));
             }
             else if(opcode == 0x5E) {
-                mem[addr] = lsr(mem[addr]);
+                bus_write(addr, lsr(bus_read(addr)));
                 cpu_cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
                     cpu_cycle += 1;
                 }
             }
             else if(opcode == 0x1E) {
-                mem[addr] = asl(mem[addr]);
+                bus_write(addr, asl(bus_read(addr)));
                 cpu_cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
                     cpu_cycle += 1;
                 }
             }
             else if(opcode == 0x7E) {
-                mem[addr] = ror(mem[addr]);
+                bus_write(addr, ror(bus_read(addr)));
                 cpu_cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
                     cpu_cycle += 1;
                 }
             }
             else if(opcode == 0x3E) {
-                mem[addr] = rol(mem[addr]);
+                bus_write(addr, rol(bus_read(addr)));
                 cpu_cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
                     cpu_cycle += 1;
@@ -1396,13 +1395,13 @@ int exec_instr() {
             }
             addr += cpu.y;
             if(opcode == 0xB9) {
-                lda(mem[addr]);
+                lda(bus_read(addr));
             }
             else if(opcode == 0xBE) {
-                ldx(mem[addr]);
+                ldx(bus_read(addr));
             }
             else if(opcode == 0xBF) {
-                lax(mem[addr]);
+                lax(bus_read(addr));
             }
             else if(opcode == 0x99) {
                 sta(addr);
@@ -1411,22 +1410,22 @@ int exec_instr() {
                 }
             }
             else if(opcode == 0x19) {
-                ora(mem[addr]);
+                ora(bus_read(addr));
             }
             else if(opcode == 0x39) {
-                and(mem[addr]);
+                and(bus_read(addr));
             }
             else if(opcode == 0x59) {
-                eor(mem[addr]);
+                eor(bus_read(addr));
             }
             else if(opcode == 0x79) {
-                adc(mem[addr]);
+                adc(bus_read(addr));
             }
             else if(opcode == 0xF9) {
-                sbc(mem[addr]);
+                sbc(bus_read(addr));
             }
             else if(opcode == 0xD9) {
-                cmp(mem[addr]);
+                cmp(bus_read(addr));
             }
             else if(opcode == 0xDB) {
                 dcp(addr);
@@ -1463,17 +1462,17 @@ int exec_instr() {
             short addr_lo = (args[2] << 8) | (unsigned char)(args[1] + 1);
             //printf("addr: %x\thi: %x\tlo: %x\n", addr, addr_hi, addr_lo);
             if(opcode == 0x6C) {
-                jmp(mem[addr_hi], mem[addr_lo]); 
+                jmp(bus_read(addr_hi), bus_read(addr_lo));
             }
             cpu_cycle += 5;
             break;
         //x_ind
         case 8:
             print_cpu(args, 2);
-            addr = mem[(cpu.x + args[1] + 1) % 256] << 8;
-            addr |= mem[(cpu.x + args[1]) % 256];
+            addr = bus_read((cpu.x + args[1] + 1) % 256) << 8;
+            addr |= bus_read((cpu.x + args[1]) % 256);
             if(opcode == 0xA1) {
-                lda(mem[addr]); 
+                lda(bus_read(addr));
             }
             else if(opcode == 0x81) {
                 sta(addr);
@@ -1482,25 +1481,25 @@ int exec_instr() {
                 sax(addr);
             }
             else if(opcode == 0x01) {
-                ora(mem[addr]);
+                ora(bus_read(addr));
             }
             else if(opcode == 0x21) {
-                and(mem[addr]);
+                and(bus_read(addr));
             }
             else if(opcode == 0x41) {
-                eor(mem[addr]);
+                eor(bus_read(addr));
             }
             else if(opcode == 0x61) {
-                adc(mem[addr]);
+                adc(bus_read(addr));
             }
             else if(opcode == 0xE1) {
-                sbc(mem[addr]);
+                sbc(bus_read(addr));
             }
             else if(opcode == 0xC1) {
-                cmp(mem[addr]);
+                cmp(bus_read(addr));
             }
             else if(opcode == 0xA3) {
-                lax(mem[addr]);
+                lax(bus_read(addr));
             }
             else if(opcode == 0xC3) {
                 dcp(addr);
@@ -1532,15 +1531,15 @@ int exec_instr() {
         //ind_y
         case 9:
             print_cpu(args, 2);
-            int int_addr = mem[(args[1] + 1) % 256] << 8;
-            int_addr |= mem[args[1]];
+            int int_addr = bus_read((args[1] + 1) % 256) << 8;
+            int_addr |= bus_read(args[1]);
             if(!same_page(int_addr, int_addr + cpu.y)) {
                 cpu_cycle += 1;
             }
             int_addr += cpu.y;
             addr = (short) int_addr;
             if(opcode == 0xB1) {
-                lda(mem[addr]);
+                lda(bus_read(addr));
             }
             if(opcode == 0x91) {
                 sta(addr);
@@ -1549,25 +1548,25 @@ int exec_instr() {
                 }
             }
             else if(opcode == 0x11) {
-                ora(mem[addr]);
+                ora(bus_read(addr));
             }
             else if(opcode == 0x31) {
-                and(mem[addr]);
+                and(bus_read(addr));
             }
             else if(opcode == 0x51) {
-                eor(mem[addr]);
+                eor(bus_read(addr));
             }
             else if(opcode == 0x71) {
-                adc(mem[addr]);
+                adc(bus_read(addr));
             }
             else if(opcode == 0xF1) {
-                sbc(mem[addr]);
+                sbc(bus_read(addr));
             }
             else if(opcode == 0xD1) {
-                cmp(mem[addr]);
+                cmp(bus_read(addr));
             }
             else if(opcode == 0xB3) {
-                lax(mem[addr]);
+                lax(bus_read(addr));
             }
             else if(opcode == 0xD3) {
                 dcp(addr);
@@ -1618,28 +1617,28 @@ int exec_instr() {
         case 10:
             print_cpu(args, 2);
             if(opcode == 0xB0) {
-                bcs(mem[cpu.pc+1]);
+                bcs(bus_read(cpu.pc + 1));
             }
             else if(opcode == 0x90) {
-                bcc(mem[cpu.pc+1]);
+                bcc(bus_read(cpu.pc + 1));
             }
             else if(opcode == 0xF0) {
-                beq(mem[cpu.pc+1]);
+                beq(bus_read(cpu.pc + 1));
             }
             else if(opcode == 0xD0) {
-                bne(mem[cpu.pc+1]);
+                bne(bus_read(cpu.pc + 1));
             }
             else if(opcode == 0x70) {
-                bvs(mem[cpu.pc+1]);
+                bvs(bus_read(cpu.pc + 1));
             }
             else if(opcode == 0x50) {
-                bvc(mem[cpu.pc+1]);
+                bvc(bus_read(cpu.pc + 1));
             }
             else if(opcode == 0x10) {
-                bpl(mem[cpu.pc+1]);
+                bpl(bus_read(cpu.pc + 1));
             }
             else if(opcode == 0x30) {
-                bmi(mem[cpu.pc+1]);
+                bmi(bus_read(cpu.pc + 1));
             }
             break;
         //zpg
@@ -1662,34 +1661,34 @@ int exec_instr() {
                 bit(addr);
             }
             else if(opcode == 0xA5) {
-                lda(mem[addr]);
+                lda(bus_read(addr));
             }
             else if(opcode == 0xA6) {
-                ldx(mem[addr]);
+                ldx(bus_read(addr));
             }
             else if(opcode == 0xA4) {
-                ldy(mem[addr]);
+                ldy(bus_read(addr));
             }
             else if(opcode == 0xA7) {
-                lax(mem[addr]);
+                lax(bus_read(addr));
             }
             else if(opcode == 0x05) {
-                ora(mem[addr]);
+                ora(bus_read(addr));
             }
             else if(opcode == 0x45) {
-                eor(mem[addr]);
+                eor(bus_read(addr));
             }
             else if(opcode == 0x25) {
-                and(mem[addr]);
+                and(bus_read(addr));
             }
             else if(opcode == 0x65) {
-                adc(mem[addr]);
+                adc(bus_read(addr));
             }
             else if(opcode == 0xE5) {
-                sbc(mem[addr]);
+                sbc(bus_read(addr));
             }
             else if(opcode == 0xC5) {
-                cmp(mem[addr]);
+                cmp(bus_read(addr));
             }
             else if(opcode == 0xC7) {
                 dcp(addr);
@@ -1700,13 +1699,13 @@ int exec_instr() {
                 cpu_cycle += 2;
             }
             else if(opcode == 0xE4) {
-                cpx(mem[addr]);
+                cpx(bus_read(addr));
             }
             else if(opcode == 0xC4) {
-                cpy(mem[addr]);
+                cpy(bus_read(addr));
             }
             else if(opcode == 0x46) {
-                mem[addr] = lsr(mem[addr]);
+                bus_write(addr, lsr(bus_read(addr)));
                 cpu_cycle += 2;
             }
             else if(opcode == 0xE6) {
@@ -1718,15 +1717,15 @@ int exec_instr() {
                 cpu_cycle += 2;
             }
             else if(opcode == 0x06) {
-                mem[addr] = asl(mem[addr]);
+                bus_write(addr, asl(bus_read(addr)));
                 cpu_cycle += 2;
             }
             else if(opcode == 0x66) {
-                mem[addr] = ror(mem[addr]);
+                bus_write(addr, ror(bus_read(addr)));
                 cpu_cycle += 2;
             }
             else if(opcode == 0x26) {
-                mem[addr] = rol(mem[addr]);
+                bus_write(addr, rol(bus_read(addr)));
                 cpu_cycle += 2;
             }
             else if(opcode == 0x07) {
@@ -1753,10 +1752,10 @@ int exec_instr() {
             print_cpu(args, 2);
             addr = (unsigned char) (cpu.x + args[1]);
             if(opcode == 0xB4) {
-                ldy(mem[addr]);
+                ldy(bus_read(addr));
             }
             else if(opcode == 0xB5) {
-                lda(mem[addr]);
+                lda(bus_read(addr));
             }
             else if(opcode == 0x94) {
                 sty(addr);
@@ -1765,22 +1764,22 @@ int exec_instr() {
                 sta(addr);
             }
             else if(opcode == 0x15) {
-                ora(mem[addr]);
+                ora(bus_read(addr));
             }
             else if(opcode == 0x35) {
-                and(mem[addr]);
+                and(bus_read(addr));
             }
             else if(opcode == 0x55) {
-                eor(mem[addr]);
+                eor(bus_read(addr));
             }
             else if(opcode == 0x75) {
-                adc(mem[addr]);
+                adc(bus_read(addr));
             }
             else if(opcode == 0xF5) {
-                sbc(mem[addr]);
+                sbc(bus_read(addr));
             }
             else if(opcode == 0xD5) {
-                cmp(mem[addr]);
+                cmp(bus_read(addr));
             }
             else if(opcode == 0xD7) {
                 dcp(addr);
@@ -1791,19 +1790,19 @@ int exec_instr() {
                 cpu_cycle += 2;
             }
             else if(opcode == 0x56) {
-                mem[addr] = lsr(mem[addr]);
+                bus_write(addr, lsr(bus_read(addr)));
                 cpu_cycle += 2;
             }
             else if(opcode == 0x16) {
-                mem[addr] = asl(mem[addr]);
+                bus_write(addr, asl(bus_read(addr)));
                 cpu_cycle += 2;
             }
             else if(opcode == 0x76) {
-                mem[addr] = ror(mem[addr]);
+                bus_write(addr, ror(bus_read(addr)));
                 cpu_cycle += 2;
             }
             else if(opcode == 0x36) {
-                mem[addr] = rol(mem[addr]);
+                bus_write(addr, rol(bus_read(addr)));
                 cpu_cycle += 2;
             }
             else if(opcode == 0xF6) {
@@ -1838,10 +1837,10 @@ int exec_instr() {
             print_cpu(args, 2);
             addr = (unsigned char) (cpu.y + args[1]);
             if(opcode == 0xB6) {
-                ldx(mem[addr]);
+                ldx(bus_read(addr));
             }
             else if(opcode == 0xB7) {
-                lax(mem[addr]);
+                lax(bus_read(addr));
             }
             else if(opcode == 0x96) {
                 stx(addr);

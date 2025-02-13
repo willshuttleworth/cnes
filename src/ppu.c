@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "ppu.h"
-#include "../parser/parser.h"
+#include "parser.h"
 
 typedef struct PPU {
     //loaded from rom

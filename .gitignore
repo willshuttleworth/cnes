@@ -2,6 +2,7 @@
 *.txt
 *.dSYM
 cnes
-hex
-test/donkeykong.nes
+test/*
+!test/nestest.nes
+!test/nestest.log
 !todo.txt

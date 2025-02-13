@@ -1,32 +1,35 @@
 TARGET = cnes 
-
 CC = gcc
 CFLAGS = -Wall -g
-
 OUTDIR = .
-SUBDIR = cpu ppu parser
 DIR_OBJ = ./obj
 
+# SDL2 configuration
 CFLAGS += $(shell pkg-config --cflags sdl2)
 LDFLAGS += $(shell pkg-config --libs sdl2)
 
-INCS = $(wildcard *.h $(foreach fd, $(SUBDIR), $(fd)/*.h))
-SRCS = $(wildcard *.c $(foreach fd, $(SUBDIR), $(fd)/*.c))
-NODIR_SRC = $(notdir $(SRCS))
-OBJS = $(addprefix $(DIR_OBJ)/, $(SRCS:c=o)) # obj/xxx.o obj/folder/xxx .o
-INC_DIRS = $(addprefix -I, $(SUBDIR))
+# Properly capture all .c files in src directory
+SRCS = $(wildcard src/*.c)
+# Create object file names by replacing src/ with obj/ and .c with .o
+OBJS = $(SRCS:src/%.c=$(DIR_OBJ)/%.o)
 
-.PHONY: clean echoes
+# Include directory
+INCS = include
+INC_DIRS = -I$(INCS)
+
+.PHONY: all clean echoes
+
+all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	$(CC) -o $(OUTDIR)/$@ $(OBJS) $(LDFLAGS)
 
-$(DIR_OBJ)/%.o: %.c $(INCS)
-	mkdir -p $(@D)
-	$(CC) -o $@ -c $< $(CFLAGS) $(INC_DIRS)
+$(DIR_OBJ)/%.o: src/%.c
+	@mkdir -p $(DIR_OBJ)
+	$(CC) $(CFLAGS) $(INC_DIRS) -c $< -o $@
 
 clean:
-	rm -rf $(DIR_OBJ)/*
+	rm -rf $(DIR_OBJ) $(TARGET)
 
 echoes:
 	@echo "INC files: $(INCS)"  

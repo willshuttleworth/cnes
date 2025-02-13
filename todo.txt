@@ -1,6 +1,9 @@
-test step in makefile
+change dir structure to have all header files in a `include` dir and all source in a `src` dir
+- after implementing bus
 
 1. implement controller/input
+    - not implementing second controller
+        - only writing to 0x4016
     - pressing key gets handled in main game loop
     - event is passed to controller function
         - this function has switch case for event 
@@ -8,4 +11,30 @@ test step in makefile
     - how to make data accessible by cpu?
         - dont have bus anymore
         - controller needs to write to shared memory
-2. ppu
+        - how to emulate cpu reading on this mem address?
+            - retry bus
+2. bus
+    - interface to cpu memory map
+        - cpu can transparently read/write to addresses that are not plain memory
+    - unit testing
+        - separate file that uses bus functions
+    - rom
+        - current parsing/loading
+            - parser reads rom, stores in `instructions` array
+            - `instructions` passed to cnes
+            - cnes passes it to cpu
+            - cpu calls parser function `load()` to move instructions into correct part of its ram
+        - cpu access     
+            - directly from ram
+        - how should bus present rom?
+            - same bus_read interface, map rom addresses to a specific rom block
+    - bus should use parser's `load()` function to init rom properly
+        - rewrite `load()` in `bus_setup()` and compare output against current impl
+    - migrating cpu from raw memory access to bus: how to still pass nestest?
+        - does nestest read/write to or from addresses that are outside cpu ram and rom sections?
+            - just print something when an address not implemented by bus is accessed
+        - check all spots where memory is referenced: change slowly and test during
+        - TODO
+            - restructure main file
+            - remove `load()` function from parser
+3. ppu

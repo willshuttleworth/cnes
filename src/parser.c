@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h> //fstat
-#include "../ppu/ppu.h"
+#include "ppu.h"
 
 #define PRG_ROM_SIZE 16384  //2^14
 #define CHR_ROM_SIZE 8192  //2^13
