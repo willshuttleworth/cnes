@@ -5,4 +5,3 @@ cnes
 test/*
 !test/nestest.nes
 !test/nestest.log
-!todo.txt

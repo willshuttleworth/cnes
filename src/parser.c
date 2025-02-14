@@ -176,37 +176,6 @@ unsigned char *parse_instructions(FILE *file) {
     return instructions;
 }
 
-//load instructions into correct memory addresses, setup interrupt vector
-//load chrom from file into chrom array
-//size is number of 16kib blocks, so 1 or 2
-void load(unsigned char *instructions, unsigned char *mem, int size) {
-    //if size is 1, copy from 0x8000 to 0xBFFF and 0xC000 to 0x10000
-    //if size is 2, copy from 0x8000 to 0x10000
-    if(size == 1) {
-        for(int i = 0; i < PRG_ROM_SIZE; i++) {
-            mem[0x8000 + i] = instructions[i];
-            mem[0xC000 + i] = instructions[i];
-        }
-        //initialize interupt vector
-        mem[0xFFFC] = 0x00;
-        mem[0xFFFD] = 0xC0;
-        return;
-    }
-    else if(size == 2) {
-        for(int i = 0; i < (PRG_ROM_SIZE * 2); i++) {
-            mem[0x8000 + i] = instructions[i];
-        } 
-        //initialize interupt vector
-        mem[0xFFFC] = 0x00;
-        mem[0xFFFD] = 0x80;
-        return;
-    }
-    else {
-        puts("invalid number of prg rom blocks");
-        exit(0);
-    }
-}
-
 void load_ppu(unsigned char *instructions, unsigned char *chrom) {
     for(int i = PRG_ROM_SIZE; i < PRG_ROM_SIZE + CHR_ROM_SIZE; i++) {
         chrom[i - PRG_ROM_SIZE] = instructions[i];
