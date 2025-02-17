@@ -15,6 +15,7 @@ int cpu_cycle;
 
 int main(int argc, char **argv) {
     //sdl setup
+    /*
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Event event;
     SDL_Window* window = SDL_CreateWindow("Keyboard Input",
@@ -22,6 +23,7 @@ int main(int argc, char **argv) {
         256, 240, 0);
 
     int quit = 0;
+    */
 
     //read rom from cmdline arg
     if(argc != 2) {
@@ -48,15 +50,21 @@ int main(int argc, char **argv) {
         
         parse_instructions(file, rom, chrom, num_blocks[0], num_blocks[1]);
         //pass rom info to cpu and ppu
-        PPU *ppu = ppu_setup(chrom, vram, palette, oam);
-        bus_setup(ram, rom, ppu);
+        ppu_setup(chrom, vram, palette, oam);
+        bus_setup(ram, rom);
         cpu_setup();
         //controller_setup(mem);
 
+        bus_write(0x200E, 0x40);
+        bus_write(0x200E, 0x00);
+
         int main_cycle = 0;
         int ret = 0;
+        
+        int test = 1;
 
-        while(quit == 0 && ret != -1) {
+        //while(quit == 0 && ret != -1) {
+        while(ret != -1 && test == 0) {
             //operands[0] = number of operands
             //operands[1..n] = bytes
             if(cpu_cycle < main_cycle) {
@@ -65,18 +73,22 @@ int main(int argc, char **argv) {
             main_cycle++;
 
             //handle input
+            /*
             while (SDL_PollEvent(&event)) {
                 if(handle_input(&event) == -1) {
                     quit = -1;
                     break;
                 }
             }
-            //SDL_Delay(16);
+            SDL_Delay(16);
+            */
         }
         
         // TODO: clean up the cleanup
+        /*
         SDL_DestroyWindow(window);
         SDL_Quit();
+        */
 
         free(num_blocks);
         free(ram);

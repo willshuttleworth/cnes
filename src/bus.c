@@ -7,7 +7,6 @@ const int CHR_ROM_SIZE = 8192; // 2^13
 typedef struct Mem {
     unsigned char *cpu_ram;  
     unsigned char *rom;
-    PPU *ppu;
 } Mem;
 
 Mem mem = {
@@ -15,10 +14,9 @@ Mem mem = {
     .rom = NULL,
 };
 
-void bus_setup(unsigned char *cpu_mem, unsigned char *cpu_rom, PPU *ppu) {
+void bus_setup(unsigned char *cpu_mem, unsigned char *cpu_rom) {
     mem.cpu_ram = cpu_mem;    
     mem.rom = cpu_rom;
-    mem.ppu = ppu;
 }
 
 unsigned char bus_read(unsigned short addr) {
@@ -52,6 +50,7 @@ unsigned char bus_read(unsigned short addr) {
                 break;
             // addr
             case 6:
+                puts("attempting to read from write only address (PPUADDR)");
                 break;
             // data
             case 7:
@@ -82,7 +81,36 @@ void bus_write(unsigned short addr, unsigned char data) {
     }
     // ppu register
     else if(addr < 0x4000) {
-        printf("ERROR: tried to write %x to address %x\n", data, addr); 
+        // addr is 0-7, corresponding to ppu reg
+        addr %= 8;
+        switch(addr) {
+            // ctrl
+            case 0:
+                break;
+            // mask
+            case 1:
+                break;
+            // status
+            case 2:
+                break;
+            // oam addr
+            case 3:
+                break;
+            // oam data
+            case 4:
+                break;
+            // scroll
+            case 5:
+                break;
+            // addr
+            case 6:
+                puts("writing to ppu addr reg");
+                addr_write(data);
+                break;
+            // data
+            case 7:
+                break;
+        }
     }
     // joypad
     else if(addr == 0x4016) {
