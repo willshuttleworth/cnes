@@ -141,20 +141,22 @@ typedef struct Header {
     char flags9;
     char flags10;
     char padding[5];
-}Header;
+} Header;
 
-int parse_blocks(FILE *file) {
+char *parse_blocks(FILE *file) {
     Header h;
     fread(&h, sizeof(Header), 1, file);
     //checking if trainer is present
     if((h.flags6 >> 2) | 0) {
         fseek(file, 512, SEEK_CUR);
     }
-    
-    return h.prg_rom_size;
+    char *ret = malloc(2);
+    ret[0] = h.prg_rom_size;
+    ret[1] = h.chr_rom_size;
+    return ret;
 }
 
-unsigned char *parse_instructions(FILE *file) {
+void parse_instructions(FILE *file, unsigned char *rom, unsigned char *chrom, int prg_blocks, int chr_blocks) {
     //seek to end and find size of rom (dont include header yeah?) and allocate array big enough
     struct stat file_stats;
     file_stats.st_uid = 0;
@@ -162,22 +164,27 @@ unsigned char *parse_instructions(FILE *file) {
     file_stats.st_size = 0;
     file_stats.st_mode = 0;
 
-    fstat(fileno(file), &file_stats); //better to use c library wrappers over syscalls? idk
-    int num_bytes = file_stats.st_size;
-    int len = num_bytes - sizeof(Header);
-    unsigned char *instructions = malloc(len);
-    
-    //read all bytes of prgrom into an array
-    int i = 0;
-    while(!feof(file)) {
-        fread(&instructions[i], sizeof(char), 1, file); 
-        i++;
-    } 
-    return instructions;
-}
+    fstat(fileno(file), &file_stats);
 
-void load_ppu(unsigned char *instructions, unsigned char *chrom) {
-    for(int i = PRG_ROM_SIZE; i < PRG_ROM_SIZE + CHR_ROM_SIZE; i++) {
-        chrom[i - PRG_ROM_SIZE] = instructions[i];
+    for(int i = 0; i < PRG_ROM_SIZE * prg_blocks; i++) {
+        fread(&rom[i], sizeof(char), 1, file); 
+    }
+    for(int i = 0; i < CHR_ROM_SIZE * chr_blocks; i++) {
+        fread(&chrom[i], sizeof(char), 1, file); 
+    }
+
+    if(prg_blocks == 1) {
+        for(int i = 0; i < PRG_ROM_SIZE; i++) {
+            rom[i + 0x4000] = rom[i];
+        }    
+        rom[0x7FFC] = 0x00;
+        rom[0x7FFD] = 0xC0;
+    }
+    else if(prg_blocks == 2) {
+        rom[0x7FFC] = 0x00;
+        rom[0x7FFD] = 0x80;
+    }
+    else {
+        perror("ERROR: invalid number of prg rom blocks");
     }
 }

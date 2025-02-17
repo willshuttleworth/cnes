@@ -1,13 +1,13 @@
 #include <stdio.h>
+#include "ppu.h"
 
 const int PRG_ROM_SIZE = 16384; // 2^14
 const int CHR_ROM_SIZE = 8192; // 2^13
 
-//TODO: implement PPU access to bus
 typedef struct Mem {
     unsigned char *cpu_ram;  
     unsigned char *rom;
-    // ppu registers (pointer to ppu struct)
+    PPU *ppu;
 } Mem;
 
 Mem mem = {
@@ -15,29 +15,10 @@ Mem mem = {
     .rom = NULL,
 };
 
-void bus_setup(unsigned char *cpu_mem, unsigned char *cpu_rom, unsigned char *instructions, int size) {
+void bus_setup(unsigned char *cpu_mem, unsigned char *cpu_rom, PPU *ppu) {
     mem.cpu_ram = cpu_mem;    
     mem.rom = cpu_rom;
-    if(size == 1) {
-        for(int i = 0; i < PRG_ROM_SIZE; i++) {
-            mem.rom[i] = instructions[i];
-            mem.rom[i + 0x4000] = instructions[i];
-        }    
-        //init interrupt vector
-        mem.rom[(PRG_ROM_SIZE * 2) - 4] = 0x00;
-        mem.rom[(PRG_ROM_SIZE * 2) - 3] = 0xC0;
-    }
-    else if(size == 2) {
-        for(int i = 0; i < PRG_ROM_SIZE * 2; i++) {
-            mem.rom[i] = instructions[i];
-        }    
-        //init interrupt vector
-        mem.rom[(PRG_ROM_SIZE * 2) - 4] = 0x00;
-        mem.rom[(PRG_ROM_SIZE * 2) - 3] = 0x80;
-    }
-    else {
-        puts("invalid number of blocks");
-    }
+    mem.ppu = ppu;
 }
 
 unsigned char bus_read(unsigned short addr) {
@@ -48,7 +29,35 @@ unsigned char bus_read(unsigned short addr) {
     }
     // ppu register
     else if(addr < 0x4000) {
-        printf("ERROR: tried to access address %x\n", addr); 
+        // addr is 0-7, corresponding to ppu reg
+        addr %= 8;
+        switch(addr) {
+            // ctrl
+            case 0:
+                break;
+            // mask
+            case 1:
+                break;
+            // status
+            case 2:
+                break;
+            // oam addr
+            case 3:
+                break;
+            // oam data
+            case 4:
+                break;
+            // scroll
+            case 5:
+                break;
+            // addr
+            case 6:
+                break;
+            // data
+            case 7:
+                break;
+        }
+        
     }
     // joypad
     else if(addr == 0x4016) {
