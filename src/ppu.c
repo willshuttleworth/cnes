@@ -147,3 +147,29 @@ unsigned char data_read() {
 void data_write(unsigned char data) {
     ppu_write(ppu.t, data);
 }
+
+void ctrl_write(unsigned char data) {
+    ppu.ctrl = data;
+}
+
+void mask_write(unsigned char data) {
+    ppu.mask = data;    
+}
+
+unsigned char status_read() {
+    ppu.w = 0;
+    return ppu.status;
+}
+
+void oamaddr_write(unsigned char data) {
+    ppu.oamaddr = data;
+}
+
+unsigned char oamdata_read() {
+    return ppu.oam[ppu.oamaddr];
+}
+
+void oamdata_write(unsigned char data) {
+    ppu.oam[ppu.oamaddr] = data;
+    ppu.oamaddr = (ppu.oamaddr + 1) % OAM_SIZE;
+}

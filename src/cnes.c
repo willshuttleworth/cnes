@@ -52,9 +52,9 @@ int main(int argc, char **argv) {
         //pass rom info to cpu and ppu
         ppu_setup(chrom, vram, palette, oam);
         bus_setup(ram, rom);
-        cpu_setup();
+        cpu_setup(oam);
         //controller_setup(mem);
-
+        
         int main_cycle = 0;
         int ret = 0;
         

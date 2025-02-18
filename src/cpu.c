@@ -37,6 +37,8 @@ typedef struct CPU {
     //negative flag
     char neg;
 
+    //copy of oam for dma
+    unsigned char *oam;
 }CPU;
 
 //stack is 0x100 to 0x1FF, next stack address is mem[STACK_TOP - stack_ptr]
@@ -56,6 +58,7 @@ CPU cpu = {
             .brk = 0,
             .of = 0,
             .neg = 0,
+            .oam = NULL,
 };
 
 //encode all status registers as single byte
@@ -315,7 +318,8 @@ void stack_test() {
     print_stack();
 }
 
-void cpu_setup() {
+void cpu_setup(unsigned char *oam) {
+    cpu.oam = oam;
     push(0);
     push(0);
     //take 7 cycles to set pc to value in mem[0xFFFC/D]
@@ -830,10 +834,28 @@ void sty(short addr) {
     return;
 }
 
+// add cycles for dma, including existing ones accounted for by the addressing mode
+void dma_clock_cycles(int existing) {
+    if(cpu_cycle % 2 == 0) {
+       cpu_cycle += (513 - existing); 
+    }
+    else {
+       cpu_cycle += (514 - existing); 
+    }
+}
+
 //STA: store value in register acc at addr
-void sta(short addr) {
-    //store acc 
-    bus_write(addr, cpu.acc);
+void sta(short addr, int existing) {
+    // check for OAMDMA
+    if(addr == 0x4014) {
+        for(int i = 0; i < 256; i++) {
+            cpu.oam[i] = bus_read((cpu.acc << 8) + i);
+        }
+        dma_clock_cycles(existing);
+    }
+    else {
+        bus_write(addr, cpu.acc);
+    }
     return;
 }
 
@@ -1185,7 +1207,7 @@ int exec_instr() {
                 lax(bus_read(addr));
             }
             else if(opcode == 0x8D) {
-                sta(addr);
+                sta(addr, 4);
             }
             else if(opcode == 0x2C) {
                 bit(addr);
@@ -1272,9 +1294,12 @@ int exec_instr() {
                 lda(bus_read(addr));
             }
             else if(opcode == 0x9D) {
-                sta(addr);
                 if(same_page(addr, addr - cpu.x)) {
                     cpu_cycle += 1;
+                    sta(addr, 5);
+                }
+                else {
+                    sta(addr, 4);
                 }
             }
             else if(opcode == 0xBC) {
@@ -1404,10 +1429,8 @@ int exec_instr() {
                 lax(bus_read(addr));
             }
             else if(opcode == 0x99) {
-                sta(addr);
-                if(same_page(addr, addr - cpu.y)) {
-                    cpu_cycle += 1;
-                }
+                cpu_cycle += 1;
+                sta(addr, 5);
             }
             else if(opcode == 0x19) {
                 ora(bus_read(addr));
@@ -1475,7 +1498,7 @@ int exec_instr() {
                 lda(bus_read(addr));
             }
             else if(opcode == 0x81) {
-                sta(addr);
+                sta(addr, 6);
             }
             else if(opcode == 0x83) {
                 sax(addr);
@@ -1542,9 +1565,12 @@ int exec_instr() {
                 lda(bus_read(addr));
             }
             if(opcode == 0x91) {
-                sta(addr);
                 if(same_page(int_addr, int_addr - cpu.y)) {
                     cpu_cycle += 1;
+                    sta(addr, 6);
+                }
+                else {
+                    sta(addr, 5);
                 }
             }
             else if(opcode == 0x11) {
@@ -1652,7 +1678,7 @@ int exec_instr() {
                 sty(addr);
             }
             else if(opcode == 0x85) {
-                sta(addr);
+                sta(addr, 3);
             }
             else if(opcode == 0x87) {
                 sax(addr);
@@ -1761,7 +1787,7 @@ int exec_instr() {
                 sty(addr);
             }
             else if(opcode == 0x95) {
-                sta(addr);
+                sta(addr, 4);
             }
             else if(opcode == 0x15) {
                 ora(bus_read(addr));

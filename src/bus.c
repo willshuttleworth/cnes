@@ -32,21 +32,25 @@ unsigned char bus_read(unsigned short addr) {
         switch(addr) {
             // ctrl
             case 0:
+                perror("attempting to read from write only address (PPUCTRL)");
                 break;
             // mask
             case 1:
+                perror("attempting to read from write only address (PPUMASK)");
                 break;
             // status
             case 2:
-                break;
+                return status_read();
             // oam addr
             case 3:
+                perror("attempting to read from write only address (OAMADDR)");
                 break;
             // oam data
             case 4:
-                break;
+                return oamdata_read();
             // scroll
             case 5:
+                perror("attempting to read from write only address (PPUSCROLL)");
                 break;
             // addr
             case 6:
@@ -86,21 +90,27 @@ void bus_write(unsigned short addr, unsigned char data) {
         switch(addr) {
             // ctrl
             case 0:
+                ctrl_write(data);
                 break;
             // mask
             case 1:
+                mask_write(data);
                 break;
             // status
             case 2:
+                perror("attempting to write to read only address (PPUSTATUS)");
                 break;
             // oam addr
             case 3:
+                oamaddr_write(data);
                 break;
             // oam data
             case 4:
+                oamdata_write(data);
                 break;
             // scroll
             case 5:
+                perror("ERROR: PPUSCROLL writing not implemented");
                 break;
             // addr
             case 6:
