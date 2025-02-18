@@ -55,16 +55,11 @@ int main(int argc, char **argv) {
         cpu_setup();
         //controller_setup(mem);
 
-        bus_write(0x200E, 0x40);
-        bus_write(0x200E, 0x00);
-
         int main_cycle = 0;
         int ret = 0;
         
-        int test = 1;
-
         //while(quit == 0 && ret != -1) {
-        while(ret != -1 && test == 0) {
+        while(ret != -1) {
             //operands[0] = number of operands
             //operands[1..n] = bytes
             if(cpu_cycle < main_cycle) {

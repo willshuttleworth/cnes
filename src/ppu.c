@@ -25,6 +25,7 @@ typedef struct PPU {
     unsigned short t;
     unsigned char w;
 
+    unsigned char read_buffer;
     // oam dma ?
 } PPU;
 
@@ -49,6 +50,8 @@ PPU ppu = {
     .v = 0,
     .t = 0,
     .w = 0,
+
+    .read_buffer = 0,
 };
 
 void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette, unsigned char *oam) {
@@ -63,15 +66,15 @@ unsigned char ppu_read(unsigned short addr) {
 
     // chrom
     if(addr < 0x2000) {
-
+        return ppu.chrom[addr];
     }
     // vram
     else if(addr < 0x3000) {
-
+        return ppu.vram[addr % 0x3000];
     }
     // palette
     else {
-
+        return ppu.palette[addr % 0x3F00];
     }
     return 0;
 }
@@ -81,15 +84,15 @@ void ppu_write(unsigned short addr, unsigned char data) {
 
     // chrom
     if(addr < 0x2000) {
-
+        perror("ERROR: attempting to write to chrom");
     }
     // vram
     else if(addr < 0x3000) {
-
+        ppu.vram[addr % 0x3000] = data;
     }
     // palette
     else {
-
+        ppu.palette[addr % 0x3F00] = data;
     }
 }
 
@@ -111,5 +114,36 @@ void addr_write(unsigned char addr) {
     if(ppu.t > 0x3FFF) {
         ppu.t &= 0x3FFF;
     }
-    printf("addr: %x w: %d t: %x\n", ppu.addr, ppu.w, ppu.t);
+}
+
+unsigned char data_read() {
+    unsigned char new = ppu_read(ppu.t);     
+    unsigned char ret = 0;
+    
+    // data is from palette, return it immediately
+    if(ppu.t >= 0x3F00 && ppu.t <= 0x3FFF) {
+        // how should read buffer be updated/cleared after read to palette?
+        ppu.read_buffer = new;
+        ret = new;
+    }
+    else {
+        //swap new and buffer, return former buffer value
+        unsigned char swap = ppu.read_buffer;
+        ppu.read_buffer = new;
+        ret = swap;
+    }
+
+    // increment read address 
+    char inc = (ppu.ctrl >> 2) & 1;
+    if(inc == 0) {
+        ppu.t = (ppu.t + 1) % 0x3FFF;      
+    }
+    else {
+        ppu.t = (ppu.t + 32) % 0x3FFF;      
+    }
+    return ret;
+}
+
+void data_write(unsigned char data) {
+    ppu_write(ppu.t, data);
 }

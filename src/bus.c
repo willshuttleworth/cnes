@@ -50,11 +50,11 @@ unsigned char bus_read(unsigned short addr) {
                 break;
             // addr
             case 6:
-                puts("attempting to read from write only address (PPUADDR)");
+                perror("attempting to read from write only address (PPUADDR)");
                 break;
             // data
             case 7:
-                break;
+                return data_read();
         }
         
     }
@@ -104,11 +104,11 @@ void bus_write(unsigned short addr, unsigned char data) {
                 break;
             // addr
             case 6:
-                puts("writing to ppu addr reg");
                 addr_write(data);
                 break;
             // data
             case 7:
+                data_write(data);
                 break;
         }
     }
