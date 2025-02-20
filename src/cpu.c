@@ -39,6 +39,8 @@ typedef struct CPU {
 
     //copy of oam for dma
     unsigned char *oam;
+
+    int *nmi;
 }CPU;
 
 //stack is 0x100 to 0x1FF, next stack address is mem[STACK_TOP - stack_ptr]
@@ -59,6 +61,7 @@ CPU cpu = {
             .of = 0,
             .neg = 0,
             .oam = NULL,
+            .nmi = NULL,
 };
 
 //encode all status registers as single byte
@@ -318,8 +321,9 @@ void stack_test() {
     print_stack();
 }
 
-void cpu_setup(unsigned char *oam) {
+void cpu_setup(unsigned char *oam, int *nmi) {
     cpu.oam = oam;
+    cpu.nmi = nmi;
     push(0);
     push(0);
     //take 7 cycles to set pc to value in mem[0xFFFC/D]
@@ -980,10 +984,11 @@ void rra(short addr) {
 }
 
 int exec_instr() {
-    /* 
-    unsigned char opcode = mem[cpu.pc];
-    unsigned char args[3] = {opcode, mem[cpu.pc+1], mem[cpu.pc+2]};
-    */
+    if(*cpu.nmi == 1) {
+        cpu.pc = bus_read(0xFFFB) << 8;
+        cpu.pc |= bus_read(0xFFFA);
+        *cpu.nmi = 0;
+    }
     unsigned char opcode = bus_read(cpu.pc);
     unsigned char args[3] = {opcode, bus_read(cpu.pc + 1), bus_read(cpu.pc + 2)};
 
@@ -1878,5 +1883,5 @@ int exec_instr() {
             cpu_cycle += 4;
             break;
     }
-    return 0;
+    return cpu_cycle;
 }

@@ -48,24 +48,22 @@ int main(int argc, char **argv) {
         unsigned char *palette = malloc(PALETTE_SIZE);
         unsigned char *oam = malloc(OAM_SIZE);
         
+        int nmi = 0;
         parse_instructions(file, rom, chrom, num_blocks[0], num_blocks[1]);
         //pass rom info to cpu and ppu
-        ppu_setup(chrom, vram, palette, oam);
+        ppu_setup(chrom, vram, palette, oam, &nmi);
         bus_setup(ram, rom);
-        cpu_setup(oam);
+        cpu_setup(oam, &nmi);
         //controller_setup(mem);
         
-        int main_cycle = 0;
-        int ret = 0;
+        int cycle = 0;
         
         //while(quit == 0 && ret != -1) {
-        while(ret != -1) {
+        while(cycle != -1) {
             //operands[0] = number of operands
             //operands[1..n] = bytes
-            if(cpu_cycle < main_cycle) {
-                ret = exec_instr();
-            }
-            main_cycle++;
+            cycle = exec_instr();
+            ppu_tick_to(cycle);
 
             //handle input
             /*
@@ -79,7 +77,7 @@ int main(int argc, char **argv) {
             */
         }
         
-        // TODO: clean up the cleanup
+        // TODO: clean up the cleanup (arena allocation!)
         /*
         SDL_DestroyWindow(window);
         SDL_Quit();

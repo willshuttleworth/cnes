@@ -1,5 +1,5 @@
-void ppu_tick_to(unsigned int cycle);
-void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette, unsigned char *oam);
+void ppu_tick_to(int cycle);
+void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette, unsigned char *oam, int *nmi);
 unsigned char ppu_read(unsigned short addr);
 void ppu_write(unsigned short addr, unsigned char data);
 void addr_write(unsigned char addr);

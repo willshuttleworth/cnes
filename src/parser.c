@@ -166,6 +166,7 @@ void parse_instructions(FILE *file, unsigned char *rom, unsigned char *chrom, in
 
     fstat(fileno(file), &file_stats);
 
+    printf("prg rom offset: %x\n", ftell(file));
     for(int i = 0; i < PRG_ROM_SIZE * prg_blocks; i++) {
         fread(&rom[i], sizeof(char), 1, file); 
     }

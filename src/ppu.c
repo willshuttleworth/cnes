@@ -26,7 +26,9 @@ typedef struct PPU {
     unsigned char w;
 
     unsigned char read_buffer;
-    // oam dma ?
+
+    int ppu_cycle;
+    int *nmi;
 } PPU;
 
 PPU ppu = {
@@ -52,13 +54,29 @@ PPU ppu = {
     .w = 0,
 
     .read_buffer = 0,
+    .ppu_cycle = 0,
+    .nmi = NULL,
 };
 
-void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette, unsigned char *oam) {
+void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette, unsigned char *oam, int *nmi) {
     ppu.chrom = chrom;
     ppu.vram = vram;
     ppu.palette = palette;
     ppu.oam = oam;
+    ppu.nmi = nmi;
+}
+
+void ppu_tick_to(int cycle) {
+    while(ppu.ppu_cycle <= cycle) {
+        //printf("ppu cycle: %d\n", ppu.ppu_cycle);
+        ppu.ppu_cycle++;
+        if(0) {
+            *ppu.nmi = 1;
+            return;
+        }
+        //if(ppu.mask) rendering enabled
+        // render_pixel()
+    } 
 }
 
 unsigned char ppu_read(unsigned short addr) {
@@ -171,5 +189,4 @@ unsigned char oamdata_read() {
 
 void oamdata_write(unsigned char data) {
     ppu.oam[ppu.oamaddr] = data;
-    ppu.oamaddr = (ppu.oamaddr + 1) % OAM_SIZE;
 }

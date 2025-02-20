@@ -3,5 +3,3 @@
 *.dSYM
 cnes
 test/*
-!test/nestest.nes
-!test/nestest.log
