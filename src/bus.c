@@ -64,7 +64,8 @@ unsigned char bus_read(unsigned short addr) {
     }
     // joypad
     else if(addr == 0x4016) {
-        printf("ERROR: tried to access address %x\n", addr); 
+        // joypad not implemented yet
+        return 0;
     }
     // cart rom
     else if(addr >= 0x8000) {
@@ -124,9 +125,9 @@ void bus_write(unsigned short addr, unsigned char data) {
     }
     // joypad
     else if(addr == 0x4016) {
-        printf("ERROR: tried to write %x to address %x\n", data, addr); 
+        puts("controller writing not implemented"); 
     }
     else {
-        // printf("ERROR: tried to write %x to address %x\n", data, addr); 
+        printf("ERROR: tried to write %x to address %x\n", data, addr); 
     }
 }

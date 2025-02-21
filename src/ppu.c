@@ -29,6 +29,11 @@ typedef struct PPU {
 
     int ppu_cycle;
     int *nmi;
+
+    // -1 to 260
+    int scanline;
+    // 1 to 340
+    int dot;
 } PPU;
 
 PPU ppu = {
@@ -56,6 +61,10 @@ PPU ppu = {
     .read_buffer = 0,
     .ppu_cycle = 0,
     .nmi = NULL,
+
+    // rendering metadata
+    .scanline = -1,
+    .dot = 1,
 };
 
 void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette, unsigned char *oam, int *nmi) {
@@ -64,19 +73,44 @@ void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette
     ppu.palette = palette;
     ppu.oam = oam;
     ppu.nmi = nmi;
+    // vblank
+    ppu.status = 0x80;
+    *ppu.nmi = 0;
 }
 
-void ppu_tick_to(int cycle) {
-    while(ppu.ppu_cycle <= cycle) {
-        //printf("ppu cycle: %d\n", ppu.ppu_cycle);
-        ppu.ppu_cycle++;
-        if(0) {
-            *ppu.nmi = 1;
-            return;
-        }
-        //if(ppu.mask) rendering enabled
-        // render_pixel()
-    } 
+// TODO: reset dot/scanline counters at end of loops (for loops)?
+void ppu_tick_to(unsigned long long cycle) {
+    static char init_vblank = 1;
+    printf("entering tick_to, scanline is: %d\n", ppu.scanline);
+    while(ppu.scanline <= 260) {
+        // exit function entirely when cycle allowance is up
+        while(ppu.dot <= 340) {
+            if(ppu.ppu_cycle > cycle * 3) {
+                return;
+            }
+            printf("%d %d\n", ppu.scanline, ppu.dot);
+            /*
+            //if(ppu.mask) rendering enabled
+            // render_pixel()
+
+            // dumb way to enable startup vblank
+            if(init_vblank && ppu.ppu_cycle >= 89100) {
+                ppu.status &= 0x80;
+                init_vblank = 0;
+                puts("initial vblank");
+            }
+            if(0) {
+                *ppu.nmi = 1;
+                return;
+            }
+            */
+            ppu.ppu_cycle++;
+            ppu.dot++;
+        } 
+        ppu.dot = 1;
+        ppu.scanline++;
+    }
+    ppu.scanline = -1;
 }
 
 unsigned char ppu_read(unsigned short addr) {

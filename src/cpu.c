@@ -45,7 +45,7 @@ typedef struct CPU {
 
 //stack is 0x100 to 0x1FF, next stack address is mem[STACK_TOP - stack_ptr]
 //stack grows down from STACK_TOP(0x1FF)
-extern int cpu_cycle;
+int cpu_cycle;
 
 CPU cpu = { 
             .acc = 0,

@@ -166,24 +166,19 @@ void parse_instructions(FILE *file, unsigned char *rom, unsigned char *chrom, in
 
     fstat(fileno(file), &file_stats);
 
-    printf("prg rom offset: %x\n", ftell(file));
-    for(int i = 0; i < PRG_ROM_SIZE * prg_blocks; i++) {
-        fread(&rom[i], sizeof(char), 1, file); 
-    }
-    for(int i = 0; i < CHR_ROM_SIZE * chr_blocks; i++) {
-        fread(&chrom[i], sizeof(char), 1, file); 
-    }
+    fread(rom, PRG_ROM_SIZE * prg_blocks, 1, file); 
+    fread(chrom, CHR_ROM_SIZE * chr_blocks, 1, file); 
 
     if(prg_blocks == 1) {
         for(int i = 0; i < PRG_ROM_SIZE; i++) {
             rom[i + 0x4000] = rom[i];
         }    
-        rom[0x7FFC] = 0x00;
-        rom[0x7FFD] = 0xC0;
+        //rom[0x7FFC] = 0x00;
+        //rom[0x7FFD] = 0xC0;
     }
     else if(prg_blocks == 2) {
-        rom[0x7FFC] = 0x00;
-        rom[0x7FFD] = 0x80;
+        //rom[0x7FFC] = 0x00;
+        //rom[0x7FFD] = 0x80;
     }
     else {
         perror("ERROR: invalid number of prg rom blocks");

@@ -9,7 +9,8 @@
 
 #define ADDRESS_SPACE 65536 //2^16
 #define PRG_ROM_SIZE 16384
-
+#define CHR_ROM_SIZE 8192
+ 
 //globals (for cpu)
 int cpu_cycle;
 
@@ -43,7 +44,7 @@ int main(int argc, char **argv) {
         //allocate memory for cpu/ppu
         unsigned char *ram = malloc(0x0800);
         unsigned char *rom = malloc(0x8000);
-        unsigned char *chrom = malloc(CHROM_SIZE);
+        unsigned char *chrom = malloc(CHR_ROM_SIZE);
         unsigned char *vram = malloc(VRAM_SIZE);
         unsigned char *palette = malloc(PALETTE_SIZE);
         unsigned char *oam = malloc(OAM_SIZE);
@@ -56,7 +57,7 @@ int main(int argc, char **argv) {
         cpu_setup(oam, &nmi);
         //controller_setup(mem);
         
-        int cycle = 0;
+        unsigned long long cycle = 0;
         
         //while(quit == 0 && ret != -1) {
         while(cycle != -1) {
