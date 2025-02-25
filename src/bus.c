@@ -111,7 +111,7 @@ void bus_write(unsigned short addr, unsigned char data) {
                 break;
             // scroll
             case 5:
-                perror("ERROR: PPUSCROLL writing not implemented");
+                //perror("ERROR: PPUSCROLL writing not implemented");
                 break;
             // addr
             case 6:

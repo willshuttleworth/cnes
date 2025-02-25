@@ -1,6 +1,4 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include "ppu.h"
 
 typedef struct PPU {
     //sprites as bitmap images (pattern tables)
@@ -11,6 +9,7 @@ typedef struct PPU {
     unsigned char *palette;
     //sprite positioning (not part of ppu mmap, accessed independently)
     unsigned char *oam;
+    unsigned char *oam2;
 
     //registers
     unsigned char ctrl;
@@ -44,6 +43,9 @@ PPU ppu = {
     .palette = 0,
     //sprite positioning (not part of ppu mmap, accessed independently)
     .oam = 0,
+    // sprite data for next scanline
+    // 4 bytes per sprite, 8 sprites allowed, 32 bytes total
+    .oam2 = 0,
 
     //registers
     .ctrl = 0,
@@ -64,50 +66,54 @@ PPU ppu = {
 
     // rendering metadata
     .scanline = -1,
-    .dot = 1,
+    .dot = 0,
 };
 
-void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette, unsigned char *oam, int *nmi) {
+void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette, unsigned char *oam, unsigned char *oam2, int *nmi) {
     ppu.chrom = chrom;
     ppu.vram = vram;
     ppu.palette = palette;
     ppu.oam = oam;
     ppu.nmi = nmi;
+    ppu.oam2 = oam2;
     // vblank
     ppu.status = 0x80;
     *ppu.nmi = 0;
 }
 
-// TODO: reset dot/scanline counters at end of loops (for loops)?
+// im assuming that im entering this function and sometimes not advancing dots/scanlines properly
 void ppu_tick_to(unsigned long long cycle) {
-    static char init_vblank = 1;
-    printf("entering tick_to, scanline is: %d\n", ppu.scanline);
+    //printf("enabled: %d vblank: %d %d,%d\n", ppu.ctrl >> 7, ppu.status >> 7, ppu.scanline, ppu.dot);
     while(ppu.scanline <= 260) {
-        // exit function entirely when cycle allowance is up
         while(ppu.dot <= 340) {
-            if(ppu.ppu_cycle > cycle * 3) {
-                return;
+            if(ppu.scanline == 241 && ppu.dot == 1) {
+                if(ppu.ctrl >> 7) {
+                    *ppu.nmi = 1;
+                }
+                ppu.status |= 0x80;
+                //printf("vblank start: %d\n", ppu.ppu_cycle);
             }
-            printf("%d %d\n", ppu.scanline, ppu.dot);
-            /*
+            if(ppu.scanline == -1 && ppu.dot == 0) {
+                ppu.status &= 0x1F;
+                //printf("vblank end: %d\n", ppu.ppu_cycle);
+            }
+            for(int i = 0; i < 64; i++) {
+                if(ppu.oam[i * 4] >= 16 && ppu.oam[i * 4] <= 240 && i != 0) {
+                    //fprintf(stderr, "sprite %d is visible at scanline %d\n", i * 4, ppu.oam[i * 4]);
+                }
+            }
+            //printf("%d %d\n", ppu.scanline, ppu.dot);
+
             //if(ppu.mask) rendering enabled
             // render_pixel()
 
-            // dumb way to enable startup vblank
-            if(init_vblank && ppu.ppu_cycle >= 89100) {
-                ppu.status &= 0x80;
-                init_vblank = 0;
-                puts("initial vblank");
-            }
-            if(0) {
-                *ppu.nmi = 1;
-                return;
-            }
-            */
             ppu.ppu_cycle++;
             ppu.dot++;
+            if(ppu.ppu_cycle > (cycle * 3)) {
+                return;
+            }
         } 
-        ppu.dot = 1;
+        ppu.dot = 0;
         ppu.scanline++;
     }
     ppu.scanline = -1;
@@ -136,7 +142,8 @@ void ppu_write(unsigned short addr, unsigned char data) {
 
     // chrom
     if(addr < 0x2000) {
-        perror("ERROR: attempting to write to chrom");
+        // no op
+        return;
     }
     // vram
     else if(addr < 0x3000) {
@@ -201,6 +208,10 @@ void data_write(unsigned char data) {
 }
 
 void ctrl_write(unsigned char data) {
+    if(ppu.status >> 7 && data >> 7 && (ppu.ctrl >> 7) == 0) {
+        printf("vblank special case: scanline %d dot %d\n", ppu.scanline, ppu.dot);
+        *ppu.nmi = 1;
+    }
     ppu.ctrl = data;
 }
 
@@ -210,7 +221,9 @@ void mask_write(unsigned char data) {
 
 unsigned char status_read() {
     ppu.w = 0;
-    return ppu.status;
+    unsigned char ret = ppu.status;
+    ppu.status &= 0x1F;
+    return ret;
 }
 
 void oamaddr_write(unsigned char data) {

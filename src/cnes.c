@@ -48,11 +48,12 @@ int main(int argc, char **argv) {
         unsigned char *vram = malloc(VRAM_SIZE);
         unsigned char *palette = malloc(PALETTE_SIZE);
         unsigned char *oam = malloc(OAM_SIZE);
+        unsigned char *oam2 = malloc(32);
         
         int nmi = 0;
         parse_instructions(file, rom, chrom, num_blocks[0], num_blocks[1]);
         //pass rom info to cpu and ppu
-        ppu_setup(chrom, vram, palette, oam, &nmi);
+        ppu_setup(chrom, vram, palette, oam, oam2, &nmi);
         bus_setup(ram, rom);
         cpu_setup(oam, &nmi);
         //controller_setup(mem);
@@ -91,6 +92,7 @@ int main(int argc, char **argv) {
         free(vram);
         free(palette);
         free(oam);
+        free(oam2);
 
         fclose(file);
     }

@@ -340,9 +340,12 @@ void brk() {
     cpu.brk = 1;
 
     //push status reg, pc lo byte, pc hi byte onto stack (in that order)
+    /*
     push((unsigned char)cpu.pc); 
     push((unsigned char)(cpu.pc >> 8)); 
-
+    */
+    push_word(cpu.pc + 2);
+    push(encode_status() | 0x10);
     cpu.pc = bus_read(0xFFFF);
     cpu.pc <<= 8;
     cpu.pc |= bus_read(0xFFFE);
@@ -985,9 +988,14 @@ void rra(short addr) {
 
 int exec_instr() {
     if(*cpu.nmi == 1) {
+        puts("nmi");
+        push_word(cpu.pc);
+        push(encode_status() | 0x10);
+
         cpu.pc = bus_read(0xFFFB) << 8;
         cpu.pc |= bus_read(0xFFFA);
         *cpu.nmi = 0;
+        cpu_cycle += 7;
     }
     unsigned char opcode = bus_read(cpu.pc);
     unsigned char args[3] = {opcode, bus_read(cpu.pc + 1), bus_read(cpu.pc + 2)};
