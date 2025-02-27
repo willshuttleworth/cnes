@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <SDL2/SDL.h>
 
 typedef struct PPU {
     //sprites as bitmap images (pattern tables)
@@ -33,6 +34,11 @@ typedef struct PPU {
     int scanline;
     // 1 to 340
     int dot;
+
+    //sdl 
+    SDL_Texture *texture;
+    SDL_Renderer *renderer;
+    unsigned char *pixels;
 } PPU;
 
 PPU ppu = {
@@ -67,9 +73,13 @@ PPU ppu = {
     // rendering metadata
     .scanline = -1,
     .dot = 0,
+    //sdl 
+    .texture = NULL,
+    .renderer = NULL,
+    .pixels = NULL,
 };
 
-void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette, unsigned char *oam, unsigned char *oam2, int *nmi) {
+void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette, unsigned char *oam, unsigned char *oam2, int *nmi, SDL_Texture *texture, SDL_Renderer *renderer, unsigned char *pixels) {
     ppu.chrom = chrom;
     ppu.vram = vram;
     ppu.palette = palette;
@@ -79,9 +89,20 @@ void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette
     // vblank
     ppu.status = 0x80;
     *ppu.nmi = 0;
+    //sdl 
+    ppu.texture = texture;
+    ppu.renderer = renderer;
+    ppu.pixels = pixels;
 }
 
-// im assuming that im entering this function and sometimes not advancing dots/scanlines properly
+void draw(int x, int y) {
+    int pixel = (y * 240 + x) * 3;
+    ppu.pixels[pixel] = 255;
+    ppu.pixels[pixel + 1] = 255;
+    ppu.pixels[pixel + 2] = 255;
+}
+
+// TODO: rework sprite rendering
 void ppu_tick_to(unsigned long long cycle) {
     //printf("enabled: %d vblank: %d %d,%d\n", ppu.ctrl >> 7, ppu.status >> 7, ppu.scanline, ppu.dot);
     while(ppu.scanline <= 260) {
@@ -91,21 +112,21 @@ void ppu_tick_to(unsigned long long cycle) {
                     *ppu.nmi = 1;
                 }
                 ppu.status |= 0x80;
-                //printf("vblank start: %d\n", ppu.ppu_cycle);
             }
             if(ppu.scanline == -1 && ppu.dot == 0) {
                 ppu.status &= 0x1F;
-                //printf("vblank end: %d\n", ppu.ppu_cycle);
             }
-            for(int i = 0; i < 64; i++) {
-                if(ppu.oam[i * 4] >= 16 && ppu.oam[i * 4] <= 240 && i != 0) {
-                    //fprintf(stderr, "sprite %d is visible at scanline %d\n", i * 4, ppu.oam[i * 4]);
-                }
-            }
-            //printf("%d %d\n", ppu.scanline, ppu.dot);
-
             //if(ppu.mask) rendering enabled
             // render_pixel()
+            for(int i = 0; i < 64; i++) {
+                if(ppu.oam[i * 4] >= 15 && ppu.oam[i * 4] < 239 && ppu.oam[i * 4] - 1 == ppu.scanline) {
+                    // check if sprite rendering enabled
+                    if(ppu.mask & 0x10) {
+                        draw(i * 4 + 3, i * 4);
+                        printf("sprite %d is at (%d, %d)\n", i * 4, ppu.oam[i * 4], ppu.oam[i * 4 + 3]);
+                    }
+                }
+            }
 
             ppu.ppu_cycle++;
             ppu.dot++;
@@ -115,6 +136,13 @@ void ppu_tick_to(unsigned long long cycle) {
         } 
         ppu.dot = 0;
         ppu.scanline++;
+        if(ppu.scanline == 260) {
+            SDL_UpdateTexture(ppu.texture, NULL, ppu.pixels, 256 * 3);
+            SDL_RenderClear(ppu.renderer);
+            SDL_RenderCopy(ppu.renderer, ppu.texture, NULL, NULL);
+            SDL_RenderPresent(ppu.renderer);
+            memset(ppu.pixels, 0, 256 * 240 * 3);
+        }
     }
     ppu.scanline = -1;
 }
@@ -138,8 +166,6 @@ unsigned char ppu_read(unsigned short addr) {
 }
 
 void ppu_write(unsigned short addr, unsigned char data) {
-    addr %= 0x4000; 
-
     // chrom
     if(addr < 0x2000) {
         // no op
@@ -147,7 +173,8 @@ void ppu_write(unsigned short addr, unsigned char data) {
     }
     // vram
     else if(addr < 0x3000) {
-        ppu.vram[addr % 0x3000] = data;
+        //printf("erm: %x %x\n", addr, addr % 0x3000);
+        ppu.vram[addr % 0x2000] = data;
     }
     // palette
     else {

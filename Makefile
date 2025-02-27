@@ -1,6 +1,7 @@
 TARGET = cnes 
-CC = gcc
-CFLAGS = -Wall -g
+CC = gcc 
+CFLAGS = -Wall -g -fsanitize=address,undefined
+LDFLAGS = -fsanitize=address,undefined
 OUTDIR = .
 DIR_OBJ = ./obj
 

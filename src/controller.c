@@ -51,6 +51,9 @@ int handle_input(SDL_Event *event) {
                 case SDLK_RETURN:
                     printf("start pressed\n");
                     break;
+                default:
+                    printf("other input event, ignoring\n");
+                    break;
             }
             break;
         case SDL_KEYUP:
