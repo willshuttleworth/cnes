@@ -59,6 +59,7 @@ int main(int argc, char **argv) {
         controller_setup(ram);
         
         unsigned long long cycle = 0;
+        unsigned long long old_cycles = 0;
         
         while(quit != -1) {
             //operands[0] = number of operands
@@ -68,13 +69,16 @@ int main(int argc, char **argv) {
 
             //handle input
             SDL_Event event;
-            while (SDL_PollEvent(&event)) {
-                if(handle_input(&event) == -1) {
-                    quit = -1;
-                    break;
+            //only call this once a frame (every 30k cycles)
+            if(cycle - old_cycles > 30000 || cycle == 9) {
+                while (SDL_PollEvent(&event)) {
+                    if(handle_input(&event) == -1) {
+                        quit = -1;
+                        break;
+                    }
                 }
+                old_cycles = cycle;
             }
-            //SDL_Delay(16);
         }
         
         // TODO: clean up the cleanup (arena allocation!)

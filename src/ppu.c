@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <time.h>
 #include <SDL2/SDL.h>
 
 typedef struct PPU {
@@ -11,6 +12,7 @@ typedef struct PPU {
     //sprite positioning (not part of ppu mmap, accessed independently)
     unsigned char *oam;
     unsigned char *oam2;
+    int curr;
 
     //registers
     unsigned char ctrl;
@@ -52,6 +54,8 @@ PPU ppu = {
     // sprite data for next scanline
     // 4 bytes per sprite, 8 sprites allowed, 32 bytes total
     .oam2 = 0,
+    // pointer to next open spot in oam2
+    .curr = 0,
 
     //registers
     .ctrl = 0,
@@ -95,18 +99,64 @@ void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette
     ppu.pixels = pixels;
 }
 
-void draw(int x, int y) {
+void draw(unsigned char x, unsigned char y) {
     int pixel = (y * 240 + x) * 3;
     ppu.pixels[pixel] = 255;
     ppu.pixels[pixel + 1] = 255;
     ppu.pixels[pixel + 2] = 255;
 }
 
-// TODO: rework sprite rendering
+Uint64 lastTime = 0;
+double deltaTime = 0;
+double fps = 0;
+unsigned long long cycle_start = 0;
+unsigned long long cycle_end = 0;
+
+void startFrameTimer() {
+    lastTime = SDL_GetPerformanceCounter();
+}
+
+void endFrameTimer() {
+    Uint64 currentTime = SDL_GetPerformanceCounter();
+    Uint64 freq = SDL_GetPerformanceFrequency();
+
+    deltaTime = (double)(currentTime - lastTime) / freq;  // Frame time in seconds
+    fps = 1.0 / deltaTime;  // FPS
+
+    fprintf(stderr, "frame time: %.3f ms, FPS: %.2f, cycles: %llu\n", deltaTime * 1000, fps, cycle_end - cycle_start);
+}
+
 void ppu_tick_to(unsigned long long cycle) {
     //printf("enabled: %d vblank: %d %d,%d\n", ppu.ctrl >> 7, ppu.status >> 7, ppu.scanline, ppu.dot);
     while(ppu.scanline <= 260) {
+        // read oam, find sprites on this scanline
+        if(ppu.scanline == -1) {
+            startFrameTimer();
+            cycle_start = cycle;
+            ppu.ctrl &= 0xDF;
+        }
+        ppu.curr = 0;
+        if(ppu.scanline < 240) {
+            for(int i = 0; i < 64; i++) {
+                if(ppu.oam[i * 4] < 239 && ppu.oam[i * 4] - 1 == ppu.scanline) {
+                    // check if sprite rendering enabled
+                    if(ppu.mask & 0x10 && ppu.curr < 8) {
+                        ppu.oam2[ppu.curr] = ppu.oam[i * 4];
+                        ppu.oam2[ppu.curr + 1] = ppu.oam[i * 4 + 1];
+                        ppu.oam2[ppu.curr + 2] = ppu.oam[i * 4 + 2];
+                        ppu.oam2[ppu.curr + 3] = ppu.oam[i * 4 + 3];
+                        ppu.curr++;
+                    }
+                    else if(ppu.curr == 8) {
+                        ppu.ctrl |= 0x20;
+                    }
+                }
+            }
+        }
         while(ppu.dot <= 340) {
+            if(ppu.ppu_cycle > (cycle * 3)) {
+                return;
+            }
             if(ppu.scanline == 241 && ppu.dot == 1) {
                 if(ppu.ctrl >> 7) {
                     *ppu.nmi = 1;
@@ -118,30 +168,26 @@ void ppu_tick_to(unsigned long long cycle) {
             }
             //if(ppu.mask) rendering enabled
             // render_pixel()
-            for(int i = 0; i < 64; i++) {
-                if(ppu.oam[i * 4] >= 15 && ppu.oam[i * 4] < 239 && ppu.oam[i * 4] - 1 == ppu.scanline) {
-                    // check if sprite rendering enabled
-                    if(ppu.mask & 0x10) {
-                        draw(i * 4 + 3, i * 4);
-                        printf("sprite %d is at (%d, %d)\n", i * 4, ppu.oam[i * 4], ppu.oam[i * 4 + 3]);
-                    }
+            for(int i = 0; i < 8; i++) {
+                if(ppu.oam2[i * 4 + 3] == ppu.dot) {
+                    draw(ppu.oam2[i * 4 + 3], ppu.oam2[i * 4]);
                 }
             }
 
             ppu.ppu_cycle++;
             ppu.dot++;
-            if(ppu.ppu_cycle > (cycle * 3)) {
-                return;
-            }
         } 
         ppu.dot = 0;
         ppu.scanline++;
         if(ppu.scanline == 260) {
             SDL_UpdateTexture(ppu.texture, NULL, ppu.pixels, 256 * 3);
-            SDL_RenderClear(ppu.renderer);
             SDL_RenderCopy(ppu.renderer, ppu.texture, NULL, NULL);
             SDL_RenderPresent(ppu.renderer);
             memset(ppu.pixels, 0, 256 * 240 * 3);
+            memset(ppu.oam2, 0, 32);
+            cycle_end = cycle;
+            endFrameTimer();
+            SDL_Delay(32);
         }
     }
     ppu.scanline = -1;
