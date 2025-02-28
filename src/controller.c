@@ -1,7 +1,16 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
 
-unsigned char *mem;
+typedef struct Controller {
+    unsigned char *mem;
+    // array of size 8, one element per button
+    unsigned char *state;
+} Controller;
+
+Controller controller = {
+    .mem = NULL,
+    .state = NULL,
+};
 
 // joypad state
 // A -> B -> Select -> Start -> Up -> Down -> Left -> Right
@@ -12,8 +21,9 @@ unsigned char *mem;
 //  - 0: return state of index button, increment index
 //  read operation: read strobe bit and index, update index and return button val
 
-void controller_setup(unsigned char *cpu_ram) {
-    mem = cpu_ram;
+void controller_setup(unsigned char *cpu_ram, unsigned char *state) {
+    controller.mem = cpu_ram;
+    controller.state = state;
 }
 
 //instead of printing, update memory accordingly
