@@ -11,7 +11,6 @@ typedef struct PPU {
     unsigned char *palette;
     //sprite positioning (not part of ppu mmap, accessed independently)
     unsigned char *oam;
-    unsigned char *oam2;
     int curr;
 
     //registers
@@ -52,8 +51,6 @@ PPU ppu = {
     //sprite positioning (not part of ppu mmap, accessed independently)
     .oam = 0,
     // sprite data for next scanline
-    // 4 bytes per sprite, 8 sprites allowed, 32 bytes total
-    .oam2 = 0,
     // pointer to next open spot in oam2
     .curr = 0,
 
@@ -83,13 +80,12 @@ PPU ppu = {
     .pixels = NULL,
 };
 
-void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette, unsigned char *oam, unsigned char *oam2, int *nmi, SDL_Texture *texture, SDL_Renderer *renderer, unsigned char *pixels) {
+void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette, unsigned char *oam, int *nmi, SDL_Texture *texture, SDL_Renderer *renderer, unsigned char *pixels) {
     ppu.chrom = chrom;
     ppu.vram = vram;
     ppu.palette = palette;
     ppu.oam = oam;
     ppu.nmi = nmi;
-    ppu.oam2 = oam2;
     // vblank
     ppu.status = 0x80;
     *ppu.nmi = 0;
@@ -100,7 +96,7 @@ void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette
 }
 
 void draw(unsigned char x, unsigned char y) {
-    int pixel = (y * 240 + x) * 3;
+    int pixel = (y * 256 + x) * 3;
     ppu.pixels[pixel] = 255;
     ppu.pixels[pixel + 1] = 255;
     ppu.pixels[pixel + 2] = 255;
@@ -109,8 +105,6 @@ void draw(unsigned char x, unsigned char y) {
 Uint64 lastTime = 0;
 double deltaTime = 0;
 double fps = 0;
-unsigned long long cycle_start = 0;
-unsigned long long cycle_end = 0;
 
 void startFrameTimer() {
     lastTime = SDL_GetPerformanceCounter();
@@ -120,193 +114,175 @@ void endFrameTimer() {
     Uint64 currentTime = SDL_GetPerformanceCounter();
     Uint64 freq = SDL_GetPerformanceFrequency();
 
-    deltaTime = (double)(currentTime - lastTime) / freq;  // Frame time in seconds
-    fps = 1.0 / deltaTime;  // FPS
+    deltaTime = (double)(currentTime - lastTime) / freq;  
+    fps = 1.0 / deltaTime;
 
-    fprintf(stderr, "frame time: %.3f ms, FPS: %.2f, cycles: %llu\n", deltaTime * 1000, fps, cycle_end - cycle_start);
+    fprintf(stderr, "frame time: %.3f ms, FPS: %.2f\n", deltaTime * 1000, fps);
 }
 
 void ppu_tick_to(unsigned long long cycle) {
-    //printf("enabled: %d vblank: %d %d,%d\n", ppu.ctrl >> 7, ppu.status >> 7, ppu.scanline, ppu.dot);
     while(ppu.scanline <= 260) {
         // read oam, find sprites on this scanline
-        if(ppu.scanline == -1) {
-            startFrameTimer();
-            cycle_start = cycle;
-            ppu.ctrl &= 0xDF;
-        }
         ppu.curr = 0;
-        if(ppu.scanline < 240) {
-            for(int i = 0; i < 64; i++) {
-                if(ppu.oam[i * 4] < 239 && ppu.oam[i * 4] - 1 == ppu.scanline) {
-                    // check if sprite rendering enabled
-                    if(ppu.mask & 0x10 && ppu.curr < 8) {
-                        ppu.oam2[ppu.curr] = ppu.oam[i * 4];
-                        ppu.oam2[ppu.curr + 1] = ppu.oam[i * 4 + 1];
-                        ppu.oam2[ppu.curr + 2] = ppu.oam[i * 4 + 2];
-                        ppu.oam2[ppu.curr + 3] = ppu.oam[i * 4 + 3];
-                        ppu.curr++;
-                    }
-                    else if(ppu.curr == 8) {
-                        ppu.ctrl |= 0x20;
-                    }
-                }
-            }
-        }
         while(ppu.dot <= 340) {
             if(ppu.ppu_cycle > (cycle * 3)) {
                 return;
+            }
+            if(ppu.dot == 0 && ppu.scanline < 240) {
+                if(ppu.scanline == -1) {
+                    startFrameTimer();
+                    ppu.ctrl &= 0xDF;
+                }
+                for(int i = 0; i < 64; i++) {
+                    if(ppu.oam[i * 4] - 1 == ppu.scanline && (ppu.oam[i * 4 + 2] & 0x20) == 0) {
+                        // check if sprite rendering enabled
+                        if(ppu.mask & 0x10 && ppu.curr < 8) {
+                            draw(ppu.oam[i * 4 + 3], ppu.oam[i * 4]);
+                            ppu.curr++;
+                        }
+                        else if(ppu.curr == 8) {
+                            ppu.ctrl |= 0x20;
+                        }
+                    }
+                }
             }
             if(ppu.scanline == 241 && ppu.dot == 1) {
                 if(ppu.ctrl >> 7) {
                     *ppu.nmi = 1;
                 }
                 ppu.status |= 0x80;
+                SDL_UpdateTexture(ppu.texture, NULL, ppu.pixels, 256 * 3);
+                SDL_RenderCopy(ppu.renderer, ppu.texture, NULL, NULL);
+                SDL_RenderPresent(ppu.renderer);
+                memset(ppu.pixels, 0, 256 * 240 * 3);
             }
             if(ppu.scanline == -1 && ppu.dot == 0) {
                 ppu.status &= 0x1F;
             }
-            //if(ppu.mask) rendering enabled
-            // render_pixel()
-            for(int i = 0; i < 8; i++) {
-                if(ppu.oam2[i * 4 + 3] == ppu.dot) {
-                    draw(ppu.oam2[i * 4 + 3], ppu.oam2[i * 4]);
-                }
-            }
-
             ppu.ppu_cycle++;
             ppu.dot++;
         } 
         ppu.dot = 0;
         ppu.scanline++;
-        if(ppu.scanline == 260) {
-            SDL_UpdateTexture(ppu.texture, NULL, ppu.pixels, 256 * 3);
-            SDL_RenderCopy(ppu.renderer, ppu.texture, NULL, NULL);
-            SDL_RenderPresent(ppu.renderer);
-            memset(ppu.pixels, 0, 256 * 240 * 3);
-            memset(ppu.oam2, 0, 32);
-            cycle_end = cycle;
-            endFrameTimer();
-            SDL_Delay(32);
-        }
     }
     ppu.scanline = -1;
+    endFrameTimer();
+    //SDL_Delay(30);
 }
 
-unsigned char ppu_read(unsigned short addr) {
-    addr %= 0x4000; 
+        unsigned char ppu_read(unsigned short addr) {
+            addr %= 0x4000; 
 
-    // chrom
-    if(addr < 0x2000) {
-        return ppu.chrom[addr];
-    }
-    // vram
-    else if(addr < 0x3000) {
-        return ppu.vram[addr % 0x3000];
-    }
-    // palette
-    else {
-        return ppu.palette[addr % 0x3F00];
-    }
-    return 0;
-}
+            // chrom
+            if(addr < 0x2000) {
+                return ppu.chrom[addr];
+            }
+            // vram
+            else if(addr < 0x3000) {
+                return ppu.vram[addr % 0x3000];
+            }
+            // palette
+            else {
+                return ppu.palette[addr % 0x3F00];
+            }
+            return 0;
+        }
 
-void ppu_write(unsigned short addr, unsigned char data) {
-    // chrom
-    if(addr < 0x2000) {
-        // no op
-        return;
-    }
-    // vram
-    else if(addr < 0x3000) {
-        //printf("erm: %x %x\n", addr, addr % 0x3000);
-        ppu.vram[addr % 0x2000] = data;
-    }
-    // palette
-    else {
-        ppu.palette[addr % 0x3F00] = data;
-    }
-}
+        void ppu_write(unsigned short addr, unsigned char data) {
+            // chrom
+            if(addr < 0x2000) {
+                // no op
+                return;
+            }
+            // vram
+            else if(addr < 0x3000) {
+                ppu.vram[addr % 0x2000] = data;
+            }
+            // palette
+            else {
+                ppu.palette[addr % 0x3F00] = data;
+            }
+        }
 
-void addr_write(unsigned char addr) {
-    // hi byte
-    if(ppu.w == 0) {
-        ppu.addr = addr;
-        ppu.t = addr;
-        ppu.t <<= 8;
-        ppu.w = 1;
-    }
-    // lo byte
-    else {
-        ppu.addr = addr;
-        ppu.t |= addr;
-        ppu.w = 0;
-    }
-    //mirroring 
-    if(ppu.t > 0x3FFF) {
-        ppu.t &= 0x3FFF;
-    }
-}
+        void addr_write(unsigned char addr) {
+            // hi byte
+            if(ppu.w == 0) {
+                ppu.addr = addr;
+                ppu.t = addr;
+                ppu.t <<= 8;
+                ppu.w = 1;
+            }
+            // lo byte
+            else {
+                ppu.addr = addr;
+                ppu.t |= addr;
+                ppu.w = 0;
+            }
+            //mirroring 
+            if(ppu.t > 0x3FFF) {
+                ppu.t &= 0x3FFF;
+            }
+        }
 
-unsigned char data_read() {
-    unsigned char new = ppu_read(ppu.t);     
-    unsigned char ret = 0;
-    
-    // data is from palette, return it immediately
-    if(ppu.t >= 0x3F00 && ppu.t <= 0x3FFF) {
-        // how should read buffer be updated/cleared after read to palette?
-        ppu.read_buffer = new;
-        ret = new;
-    }
-    else {
-        //swap new and buffer, return former buffer value
-        unsigned char swap = ppu.read_buffer;
-        ppu.read_buffer = new;
-        ret = swap;
-    }
+        unsigned char data_read() {
+            unsigned char new = ppu_read(ppu.t);     
+            unsigned char ret = 0;
 
-    // increment read address 
-    char inc = (ppu.ctrl >> 2) & 1;
-    if(inc == 0) {
-        ppu.t = (ppu.t + 1) % 0x3FFF;      
-    }
-    else {
-        ppu.t = (ppu.t + 32) % 0x3FFF;      
-    }
-    return ret;
-}
+            // data is from palette, return it immediately
+            if(ppu.t >= 0x3F00 && ppu.t <= 0x3FFF) {
+                // how should read buffer be updated/cleared after read to palette?
+                ppu.read_buffer = new;
+                ret = new;
+            }
+            else {
+                //swap new and buffer, return former buffer value
+                unsigned char swap = ppu.read_buffer;
+                ppu.read_buffer = new;
+                ret = swap;
+            }
 
-void data_write(unsigned char data) {
-    ppu_write(ppu.t, data);
-}
+            // increment read address 
+            char inc = (ppu.ctrl >> 2) & 1;
+            if(inc == 0) {
+                ppu.t = (ppu.t + 1) % 0x3FFF;      
+            }
+            else {
+                ppu.t = (ppu.t + 32) % 0x3FFF;      
+            }
+            return ret;
+        }
 
-void ctrl_write(unsigned char data) {
-    if(ppu.status >> 7 && data >> 7 && (ppu.ctrl >> 7) == 0) {
-        printf("vblank special case: scanline %d dot %d\n", ppu.scanline, ppu.dot);
-        *ppu.nmi = 1;
-    }
-    ppu.ctrl = data;
-}
+        void data_write(unsigned char data) {
+            ppu_write(ppu.t, data);
+        }
 
-void mask_write(unsigned char data) {
-    ppu.mask = data;    
-}
+        void ctrl_write(unsigned char data) {
+            if(ppu.status >> 7 && data >> 7 && (ppu.ctrl >> 7) == 0) {
+                printf("vblank special case: scanline %d dot %d\n", ppu.scanline, ppu.dot);
+                *ppu.nmi = 1;
+            }
+            ppu.ctrl = data;
+        }
 
-unsigned char status_read() {
-    ppu.w = 0;
-    unsigned char ret = ppu.status;
-    ppu.status &= 0x1F;
-    return ret;
-}
+        void mask_write(unsigned char data) {
+            ppu.mask = data;    
+        }
 
-void oamaddr_write(unsigned char data) {
-    ppu.oamaddr = data;
-}
+        unsigned char status_read() {
+            ppu.w = 0;
+            unsigned char ret = ppu.status;
+            ppu.status &= 0x1F;
+            return ret;
+        }
 
-unsigned char oamdata_read() {
-    return ppu.oam[ppu.oamaddr];
-}
+        void oamaddr_write(unsigned char data) {
+            ppu.oamaddr = data;
+        }
 
-void oamdata_write(unsigned char data) {
-    ppu.oam[ppu.oamaddr] = data;
-}
+        unsigned char oamdata_read() {
+            return ppu.oam[ppu.oamaddr];
+        }
+
+        void oamdata_write(unsigned char data) {
+            ppu.oam[ppu.oamaddr] = data;
+        }

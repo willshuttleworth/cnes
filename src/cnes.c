@@ -11,9 +11,6 @@
 #define PRG_ROM_SIZE 16384
 #define CHR_ROM_SIZE 8192
  
-//globals (for cpu)
-int cpu_cycle;
-
 int main(int argc, char **argv) {
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window* window = SDL_CreateWindow("cnes",
@@ -47,16 +44,17 @@ int main(int argc, char **argv) {
         unsigned char *vram = malloc(VRAM_SIZE);
         unsigned char *palette = malloc(PALETTE_SIZE);
         unsigned char *oam = malloc(OAM_SIZE);
-        unsigned char *oam2 = malloc(32);
         unsigned char *pixels = malloc(256 * 240 * 3);
+        unsigned char controller_state[8];
+        memset(controller_state, 0, 8);
         
         int nmi = 0;
         parse_instructions(file, rom, chrom, num_blocks[0], num_blocks[1]);
         //pass rom info to cpu and ppu
-        ppu_setup(chrom, vram, palette, oam, oam2, &nmi, texture, renderer, pixels);
+        ppu_setup(chrom, vram, palette, oam, &nmi, texture, renderer, pixels);
         bus_setup(ram, rom);
         cpu_setup(oam, &nmi);
-        controller_setup(ram);
+        controller_setup(ram, controller_state);
         
         unsigned long long cycle = 0;
         unsigned long long old_cycles = 0;
@@ -94,7 +92,6 @@ int main(int argc, char **argv) {
         free(vram);
         free(palette);
         free(oam);
-        free(oam2);
         free(pixels);
 
         fclose(file);
