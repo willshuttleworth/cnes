@@ -117,7 +117,7 @@ void endFrameTimer() {
     deltaTime = (double)(currentTime - lastTime) / freq;  
     fps = 1.0 / deltaTime;
 
-    fprintf(stderr, "frame time: %.3f ms, FPS: %.2f\n", deltaTime * 1000, fps);
+    //fprintf(stderr, "frame time: %.3f ms, FPS: %.2f\n", deltaTime * 1000, fps);
 }
 
 void ppu_tick_to(unsigned long long cycle) {
@@ -167,122 +167,124 @@ void ppu_tick_to(unsigned long long cycle) {
     }
     ppu.scanline = -1;
     endFrameTimer();
+    // TODO: how to do dynamic delay to ensure 60fps?
+    //SDL_Delay(16 - (deltaTime * 1000));
     //SDL_Delay(30);
 }
 
-        unsigned char ppu_read(unsigned short addr) {
-            addr %= 0x4000; 
+unsigned char ppu_read(unsigned short addr) {
+    addr %= 0x4000; 
 
-            // chrom
-            if(addr < 0x2000) {
-                return ppu.chrom[addr];
-            }
-            // vram
-            else if(addr < 0x3000) {
-                return ppu.vram[addr % 0x3000];
-            }
-            // palette
-            else {
-                return ppu.palette[addr % 0x3F00];
-            }
-            return 0;
-        }
+    // chrom
+    if(addr < 0x2000) {
+        return ppu.chrom[addr];
+    }
+    // vram
+    else if(addr < 0x3000) {
+        return ppu.vram[addr % 0x3000];
+    }
+    // palette
+    else {
+        return ppu.palette[addr % 0x3F00];
+    }
+    return 0;
+}
 
-        void ppu_write(unsigned short addr, unsigned char data) {
-            // chrom
-            if(addr < 0x2000) {
-                // no op
-                return;
-            }
-            // vram
-            else if(addr < 0x3000) {
-                ppu.vram[addr % 0x2000] = data;
-            }
-            // palette
-            else {
-                ppu.palette[addr % 0x3F00] = data;
-            }
-        }
+void ppu_write(unsigned short addr, unsigned char data) {
+    // chrom
+    if(addr < 0x2000) {
+        // no op
+        return;
+    }
+    // vram
+    else if(addr < 0x3000) {
+        ppu.vram[addr % 0x2000] = data;
+    }
+    // palette
+    else {
+        ppu.palette[addr % 0x3F00] = data;
+    }
+}
 
-        void addr_write(unsigned char addr) {
-            // hi byte
-            if(ppu.w == 0) {
-                ppu.addr = addr;
-                ppu.t = addr;
-                ppu.t <<= 8;
-                ppu.w = 1;
-            }
-            // lo byte
-            else {
-                ppu.addr = addr;
-                ppu.t |= addr;
-                ppu.w = 0;
-            }
-            //mirroring 
-            if(ppu.t > 0x3FFF) {
-                ppu.t &= 0x3FFF;
-            }
-        }
+void addr_write(unsigned char addr) {
+    // hi byte
+    if(ppu.w == 0) {
+        ppu.addr = addr;
+        ppu.t = addr;
+        ppu.t <<= 8;
+        ppu.w = 1;
+    }
+    // lo byte
+    else {
+        ppu.addr = addr;
+        ppu.t |= addr;
+        ppu.w = 0;
+    }
+    //mirroring 
+    if(ppu.t > 0x3FFF) {
+        ppu.t &= 0x3FFF;
+    }
+}
 
-        unsigned char data_read() {
-            unsigned char new = ppu_read(ppu.t);     
-            unsigned char ret = 0;
+unsigned char data_read() {
+    unsigned char new = ppu_read(ppu.t);     
+    unsigned char ret = 0;
 
-            // data is from palette, return it immediately
-            if(ppu.t >= 0x3F00 && ppu.t <= 0x3FFF) {
-                // how should read buffer be updated/cleared after read to palette?
-                ppu.read_buffer = new;
-                ret = new;
-            }
-            else {
-                //swap new and buffer, return former buffer value
-                unsigned char swap = ppu.read_buffer;
-                ppu.read_buffer = new;
-                ret = swap;
-            }
+    // data is from palette, return it immediately
+    if(ppu.t >= 0x3F00 && ppu.t <= 0x3FFF) {
+        // how should read buffer be updated/cleared after read to palette?
+        ppu.read_buffer = new;
+        ret = new;
+    }
+    else {
+        //swap new and buffer, return former buffer value
+        unsigned char swap = ppu.read_buffer;
+        ppu.read_buffer = new;
+        ret = swap;
+    }
 
-            // increment read address 
-            char inc = (ppu.ctrl >> 2) & 1;
-            if(inc == 0) {
-                ppu.t = (ppu.t + 1) % 0x3FFF;      
-            }
-            else {
-                ppu.t = (ppu.t + 32) % 0x3FFF;      
-            }
-            return ret;
-        }
+    // increment read address 
+    char inc = (ppu.ctrl >> 2) & 1;
+    if(inc == 0) {
+        ppu.t = (ppu.t + 1) % 0x3FFF;      
+    }
+    else {
+        ppu.t = (ppu.t + 32) % 0x3FFF;      
+    }
+    return ret;
+}
 
-        void data_write(unsigned char data) {
-            ppu_write(ppu.t, data);
-        }
+void data_write(unsigned char data) {
+    ppu_write(ppu.t, data);
+}
 
-        void ctrl_write(unsigned char data) {
-            if(ppu.status >> 7 && data >> 7 && (ppu.ctrl >> 7) == 0) {
-                printf("vblank special case: scanline %d dot %d\n", ppu.scanline, ppu.dot);
-                *ppu.nmi = 1;
-            }
-            ppu.ctrl = data;
-        }
+void ctrl_write(unsigned char data) {
+    if(ppu.status >> 7 && data >> 7 && (ppu.ctrl >> 7) == 0) {
+        printf("vblank special case: scanline %d dot %d\n", ppu.scanline, ppu.dot);
+        *ppu.nmi = 1;
+    }
+    ppu.ctrl = data;
+}
 
-        void mask_write(unsigned char data) {
-            ppu.mask = data;    
-        }
+void mask_write(unsigned char data) {
+    ppu.mask = data;    
+}
 
-        unsigned char status_read() {
-            ppu.w = 0;
-            unsigned char ret = ppu.status;
-            ppu.status &= 0x1F;
-            return ret;
-        }
+unsigned char status_read() {
+    ppu.w = 0;
+    unsigned char ret = ppu.status;
+    ppu.status &= 0x1F;
+    return ret;
+}
 
-        void oamaddr_write(unsigned char data) {
-            ppu.oamaddr = data;
-        }
+void oamaddr_write(unsigned char data) {
+    ppu.oamaddr = data;
+}
 
-        unsigned char oamdata_read() {
-            return ppu.oam[ppu.oamaddr];
-        }
+unsigned char oamdata_read() {
+    return ppu.oam[ppu.oamaddr];
+}
 
-        void oamdata_write(unsigned char data) {
-            ppu.oam[ppu.oamaddr] = data;
-        }
+void oamdata_write(unsigned char data) {
+    ppu.oam[ppu.oamaddr] = data;
+}

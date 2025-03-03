@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
         ppu_setup(chrom, vram, palette, oam, &nmi, texture, renderer, pixels);
         bus_setup(ram, rom);
         cpu_setup(oam, &nmi);
-        controller_setup(ram, controller_state);
+        controller_setup(controller_state);
         
         unsigned long long cycle = 0;
         unsigned long long old_cycles = 0;
@@ -65,7 +65,6 @@ int main(int argc, char **argv) {
             cycle = exec_instr();
             ppu_tick_to(cycle);
 
-            //handle input
             SDL_Event event;
             //only call this once a frame (every 30k cycles)
             if(cycle - old_cycles > 30000 || cycle == 9) {
@@ -96,5 +95,6 @@ int main(int argc, char **argv) {
 
         fclose(file);
     }
+    puts("exiting");
     return 0;
 }

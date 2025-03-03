@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "ppu.h"
+#include "controller.h"
 
 const int PRG_ROM_SIZE = 16384; // 2^14
 const int CHR_ROM_SIZE = 8192; // 2^13
@@ -64,8 +65,7 @@ unsigned char bus_read(unsigned short addr) {
     }
     // joypad
     else if(addr == 0x4016) {
-        // joypad not implemented yet
-        return 0;
+        return controller_read();
     }
     // cart rom
     else if(addr >= 0x8000) {
@@ -125,7 +125,7 @@ void bus_write(unsigned short addr, unsigned char data) {
     }
     // joypad
     else if(addr == 0x4016) {
-        puts("controller writing not implemented"); 
+        set_strobe(data);
     }
     else {
         printf("ERROR: tried to write %x to address %x\n", data, addr); 

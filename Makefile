@@ -1,7 +1,6 @@
 TARGET = cnes 
 CC = gcc 
-CFLAGS = -Wall -g # -fsanitize=address,undefined
-LDFLAGS = # -fsanitize=address,undefined
+CFLAGS = -Wall
 OUTDIR = .
 DIR_OBJ = ./obj
 
@@ -23,7 +22,7 @@ INC_DIRS = -I$(INCS)
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) -o $(OUTDIR)/$@ $(OBJS) $(LDFLAGS)
+	$(CC) -o $(OUTDIR)/$@ $(OBJS) $(CFLAGS) $(LDFLAGS)
 
 $(DIR_OBJ)/%.o: src/%.c
 	@mkdir -p $(DIR_OBJ)

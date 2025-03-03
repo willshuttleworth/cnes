@@ -324,6 +324,7 @@ void stack_test() {
 void cpu_setup(unsigned char *oam, int *nmi) {
     cpu.oam = oam;
     cpu.nmi = nmi;
+    //cpu_cycle = 0;
     push(0);
     push(0);
     //take 7 cycles to set pc to value in mem[0xFFFC/D]
