@@ -56,25 +56,20 @@ int main(int argc, char **argv) {
         cpu_setup(oam, &nmi);
         controller_setup(controller_state);
         
-        unsigned long long cycle = 0;
-        unsigned long long old_cycles = 0;
-        
         while(quit != -1) {
             //operands[0] = number of operands
             //operands[1..n] = bytes
-            cycle = exec_instr();
+            int cycle = exec_instr();
             ppu_tick_to(cycle);
 
             SDL_Event event;
-            //only call this once a frame (every 30k cycles)
-            if(cycle - old_cycles > 30000 || cycle == 9) {
+            if(nmi) {
                 while (SDL_PollEvent(&event)) {
                     if(handle_input(&event) == -1) {
                         quit = -1;
                         break;
                     }
                 }
-                old_cycles = cycle;
             }
         }
         

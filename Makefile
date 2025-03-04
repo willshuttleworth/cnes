@@ -1,6 +1,6 @@
 TARGET = cnes 
 CC = gcc 
-CFLAGS = -Wall
+CFLAGS = -Wall -g
 OUTDIR = .
 DIR_OBJ = ./obj
 

@@ -117,15 +117,17 @@ void endFrameTimer() {
     deltaTime = (double)(currentTime - lastTime) / freq;  
     fps = 1.0 / deltaTime;
 
-    //fprintf(stderr, "frame time: %.3f ms, FPS: %.2f\n", deltaTime * 1000, fps);
+    fprintf(stderr, "frame time: %.3f ms, FPS: %.2f\n", deltaTime * 1000, fps);
 }
 
-void ppu_tick_to(unsigned long long cycle) {
+void ppu_tick_to(int cycle) {
+    fprintf(stderr, "%d %d\n", ppu.scanline, ppu.dot);
     while(ppu.scanline <= 260) {
         // read oam, find sprites on this scanline
         ppu.curr = 0;
         while(ppu.dot <= 340) {
             if(ppu.ppu_cycle > (cycle * 3)) {
+                fprintf(stderr, "no cycles\n");
                 return;
             }
             if(ppu.dot == 0 && ppu.scanline < 240) {
@@ -148,6 +150,7 @@ void ppu_tick_to(unsigned long long cycle) {
             }
             if(ppu.scanline == 241 && ppu.dot == 1) {
                 if(ppu.ctrl >> 7) {
+                    ppu.ppu_cycle = 0;
                     *ppu.nmi = 1;
                 }
                 ppu.status |= 0x80;
