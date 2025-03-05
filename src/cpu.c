@@ -990,7 +990,6 @@ void rra(short addr) {
 int exec_instr() {
     if(*cpu.nmi == 1) {
         cpu_cycle = 0;
-        fprintf(stderr, "nmi\n");
         push_word(cpu.pc);
         push(encode_status() | 0x10);
 

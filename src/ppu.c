@@ -11,6 +11,7 @@ typedef struct PPU {
     unsigned char *palette;
     //sprite positioning (not part of ppu mmap, accessed independently)
     unsigned char *oam;
+    // pointer to next open spot in oam2
     int curr;
 
     //registers
@@ -44,17 +45,11 @@ typedef struct PPU {
 
 PPU ppu = {
     .chrom = 0,
-    //layout (nametables)
     .vram = 0,
-    //colors
     .palette = 0,
-    //sprite positioning (not part of ppu mmap, accessed independently)
     .oam = 0,
-    // sprite data for next scanline
-    // pointer to next open spot in oam2
     .curr = 0,
 
-    //registers
     .ctrl = 0,
     .mask = 0,
     .status = 0,
@@ -71,10 +66,8 @@ PPU ppu = {
     .ppu_cycle = 0,
     .nmi = NULL,
 
-    // rendering metadata
     .scanline = -1,
     .dot = 0,
-    //sdl 
     .texture = NULL,
     .renderer = NULL,
     .pixels = NULL,
@@ -95,13 +88,6 @@ void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette
     ppu.pixels = pixels;
 }
 
-void draw(unsigned char x, unsigned char y) {
-    int pixel = (y * 256 + x) * 3;
-    ppu.pixels[pixel] = 255;
-    ppu.pixels[pixel + 1] = 255;
-    ppu.pixels[pixel + 2] = 255;
-}
-
 Uint64 lastTime = 0;
 double deltaTime = 0;
 double fps = 0;
@@ -120,14 +106,46 @@ void endFrameTimer() {
     fprintf(stderr, "frame time: %.3f ms, FPS: %.2f\n", deltaTime * 1000, fps);
 }
 
+// access palette and draw to pixel (x, y) 
+void draw(int x, int y, int palette) {
+    int pixel = (y * 256 + x) * 3;
+    // only drawing white pixels, not background ones
+    if(palette != 0) {
+        ppu.pixels[pixel] = 255;
+        ppu.pixels[pixel + 1] = 255;
+        ppu.pixels[pixel + 2] = 255;
+    }
+}
+
+// TODO: implement priority after background drawing done
+//  - draw sprite if it has priority OR background is transparent
+// TODO: implement 8x16 sprites
+void draw_sprite(int index) {
+    int x = ppu.oam[index * 4 + 3];
+    int y = ppu.oam[index * 4];
+    unsigned short pattern_index = ppu.oam[index * 4 + 1];
+    unsigned short base = (ppu.ctrl & 0x08) << 3;
+    pattern_index = base + pattern_index * 16;
+    for(int i = 0; i < 8; i++) {
+        for(int j = 0; j < 8; j++) {
+            if(x + j > 255 || y + i > 240) {
+                continue;
+            }
+            int hi = (ppu.chrom[pattern_index + 8 + i] << j) & 0x80;
+            int lo = (ppu.chrom[pattern_index + i] << j) & 0x80;
+            unsigned char palette = (hi << 1) + lo;
+            fprintf(stderr, "index: %d base: %x pattern: %x palette: %d\n", index, base, pattern_index, palette);
+            draw(x + j, y + i, palette);
+        }
+    }
+}
+
 void ppu_tick_to(int cycle) {
-    fprintf(stderr, "%d %d\n", ppu.scanline, ppu.dot);
     while(ppu.scanline <= 260) {
         // read oam, find sprites on this scanline
         ppu.curr = 0;
         while(ppu.dot <= 340) {
             if(ppu.ppu_cycle > (cycle * 3)) {
-                fprintf(stderr, "no cycles\n");
                 return;
             }
             if(ppu.dot == 0 && ppu.scanline < 240) {
@@ -139,7 +157,8 @@ void ppu_tick_to(int cycle) {
                     if(ppu.oam[i * 4] - 1 == ppu.scanline && (ppu.oam[i * 4 + 2] & 0x20) == 0) {
                         // check if sprite rendering enabled
                         if(ppu.mask & 0x10 && ppu.curr < 8) {
-                            draw(ppu.oam[i * 4 + 3], ppu.oam[i * 4]);
+                            //draw(ppu.oam[i * 4 + 3], ppu.oam[i * 4]);
+                            draw_sprite(i);
                             ppu.curr++;
                         }
                         else if(ppu.curr == 8) {
