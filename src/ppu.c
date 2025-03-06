@@ -120,23 +120,47 @@ void draw(int x, int y, int palette) {
 // TODO: implement priority after background drawing done
 //  - draw sprite if it has priority OR background is transparent
 // TODO: implement 8x16 sprites
+// TODO: get rid of i/rev_i nonsense
 void draw_sprite(int index) {
     int x = ppu.oam[index * 4 + 3];
     int y = ppu.oam[index * 4];
+    int flip_x = ((ppu.oam[index * 4 + 2] << 1) & 0x80) >> 7;
+    int flip_y = (ppu.oam[index * 4 + 2] & 0x80) >> 7;
     unsigned short pattern_index = ppu.oam[index * 4 + 1];
-    unsigned short base = (ppu.ctrl & 0x08) << 3;
+    unsigned short base = (ppu.ctrl & 0x08) << 9;
     pattern_index = base + pattern_index * 16;
-    for(int i = 0; i < 8; i++) {
-        for(int j = 0; j < 8; j++) {
+
+    int i, j, rev_i, rev_j; 
+    if(flip_x) { j = 7; rev_j = 0; }
+    else       { rev_j = 7; j = 0; }
+    if(flip_y) { i = 7; rev_i = 0; }
+    else       { rev_i = 7; i = 0; }
+
+    // getting stuck on i: 0 j: 7
+    while(i < 8 && i > -1) {
+        while(j < 8 && j > -1) {
             if(x + j > 255 || y + i > 240) {
+                if(flip_x) { j--; rev_j++; }
+                else       { j++; rev_j--; }
                 continue;
             }
-            int hi = (ppu.chrom[pattern_index + 8 + i] << j) & 0x80;
-            int lo = (ppu.chrom[pattern_index + i] << j) & 0x80;
+            int hi = ((ppu.chrom[pattern_index + 8 + i] << j) & 0x80) >> 7;
+            int lo = ((ppu.chrom[pattern_index + i] << j) & 0x80) >> 7;
             unsigned char palette = (hi << 1) + lo;
-            fprintf(stderr, "index: %d base: %x pattern: %x palette: %d\n", index, base, pattern_index, palette);
-            draw(x + j, y + i, palette);
+            int draw_x = x + j;
+            int draw_y = y + i;
+            if(flip_x) draw_x = x + rev_j;
+            if(flip_y) draw_x = y + rev_i;
+
+            draw(draw_x, draw_y, palette);
+
+            if(flip_x) { j--; rev_j++; }
+            else       { j++; rev_j--; }
         }
+        if(flip_x) { j = 7; rev_j = 0; }
+        else       { j = 0; rev_j = 7; }
+        if(flip_y) { i--; rev_i++; }
+        else       { i++; rev_i--; }
     }
 }
 
@@ -190,7 +214,6 @@ void ppu_tick_to(int cycle) {
     ppu.scanline = -1;
     endFrameTimer();
     // TODO: how to do dynamic delay to ensure 60fps?
-    //SDL_Delay(16 - (deltaTime * 1000));
     //SDL_Delay(30);
 }
 

@@ -5,7 +5,7 @@
 
 ### building 
 
-dependencies: SDL2 and a C compiler
+dependencies: SDL2 and gcc 
 
 build steps
 * run `make` from the root of the repo
