@@ -1,6 +1,8 @@
 TARGET = cnes 
 CC = gcc 
-CFLAGS = -Wall -g
+# TODO: compiler optimizations result in incorrect colors
+CFLAGS = -Wall -g # -fsanitize=address,undefined
+LDFLAGS = # -fsanitize=address,undefined 
 OUTDIR = .
 DIR_OBJ = ./obj
 

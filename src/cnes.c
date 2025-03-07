@@ -33,19 +33,19 @@ int main(int argc, char **argv) {
             printf("invalid file\n");
             exit(0);
         }
-
         //find number of prg(16kb)/chr(8kb) rom blocks 
         char *num_blocks = parse_blocks(file);
         
         //allocate memory for cpu/ppu
         unsigned char *ram = malloc(0x0800);
         unsigned char *rom = malloc(0x8000);
-        unsigned char *chrom = malloc(CHR_ROM_SIZE);
+        unsigned char *chrom = malloc(CHR_ROM_SIZE * num_blocks[1]);
         unsigned char *vram = malloc(VRAM_SIZE);
-        unsigned char *palette = malloc(PALETTE_SIZE);
+        unsigned char palette[PALETTE_SIZE];
         unsigned char *oam = malloc(OAM_SIZE);
         unsigned char *pixels = malloc(256 * 240 * 3);
         unsigned char controller_state[8];
+        memset(palette, 0, PALETTE_SIZE);
         memset(controller_state, 0, 8);
         
         int nmi = 0;
@@ -84,12 +84,10 @@ int main(int argc, char **argv) {
         free(rom);
         free(chrom);
         free(vram);
-        free(palette);
         free(oam);
         free(pixels);
 
         fclose(file);
     }
-    puts("exiting");
     return 0;
 }

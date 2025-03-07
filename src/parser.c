@@ -173,12 +173,12 @@ void parse_instructions(FILE *file, unsigned char *rom, unsigned char *chrom, in
         for(int i = 0; i < PRG_ROM_SIZE; i++) {
             rom[i + 0x4000] = rom[i];
         }    
+        // nestest setup
         //rom[0x7FFC] = 0x00;
         //rom[0x7FFD] = 0xC0;
     }
     else if(prg_blocks == 2) {
-        //rom[0x7FFC] = 0x00;
-        //rom[0x7FFD] = 0x80;
+        // TODO: mappers
     }
     else {
         perror("ERROR: invalid number of prg rom blocks");
