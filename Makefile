@@ -1,6 +1,6 @@
 TARGET = cnes 
 CC = gcc 
-# TODO: compiler optimizations result in incorrect colors
+# TODO: compiler optimizations result in incorrect colors (only on macOS?)
 CFLAGS = -Wall -g # -fsanitize=address,undefined
 LDFLAGS = # -fsanitize=address,undefined 
 OUTDIR = .
