@@ -129,9 +129,15 @@ void endFrameTimer() {
 }
 
 // access palette and draw to pixel (x, y) 
-void draw(int x, int y, int palette, int color) {
+void draw(int x, int y, int palette, int color, int sprite) {
     int pixel = (y * 256 + x) * 3;
-    unsigned char palette_addr = 0x10 | ((palette << 2) | color);
+    unsigned char palette_addr = 0;
+    if(sprite) {
+        palette_addr = 0x10 | ((palette << 2) | color);
+    }
+    else {
+        palette_addr = palette * 4 + color;
+    }
     unsigned char sys_color = ppu.palette[palette_addr];
     // only drawing white pixels, not background ones
     if(color != 0) {
@@ -163,7 +169,6 @@ void draw_sprite(int index) {
     if(flip_y) { i = 7; rev_i = 0; }
     else       { rev_i = 7; i = 0; }
 
-    // getting stuck on i: 0 j: 7
     while(i < 8 && i > -1) {
         while(j < 8 && j > -1) {
             if(x + j > 255 || y + i > 240) {
@@ -180,7 +185,7 @@ void draw_sprite(int index) {
             if(flip_x) draw_x = x + rev_j;
             if(flip_y) draw_y = y + rev_i;
 
-            draw(draw_x, draw_y, palette, color);
+            draw(draw_x, draw_y, palette, color, 1);
 
             if(flip_x) { j--; rev_j++; }
             else       { j++; rev_j--; }
@@ -204,12 +209,55 @@ void ppu_tick_to(int cycle) {
                 if(ppu.scanline == -1) {
                     startFrameTimer();
                     ppu.ctrl &= 0xDF;
+                    
+                    // TODO: this is hardcoded to only use first nametable
+                    // each one of these bytes indexes pattern table
+                    // within this loop, loop over all 64 pixels in the 8x8 section, using draw() to set color of each in pixels array
+                    for(int i = 0; i < 0x03C0; i++) {
+                        unsigned short pattern_index = ppu.vram[i];
+                        unsigned short base = (ppu.ctrl & 0x10) << 8;
+                        pattern_index = base + pattern_index * 16;
+                        int palette = 0;
+                        int block_row = (i / 128);
+                        int block_col = i % 32 / 4;
+                        int block = block_row * 8 + block_col;
+                        /// TODO: hardcoded to first nametable
+                        unsigned char block_data = ppu.vram[0x03C0 + block];
+                        int row = i / 32;
+                        int col = i % 32;
+                        // tl
+                        if((row % 4 == 0 || row % 4 == 1) && (col % 4 == 0 || col % 4 == 1)) {
+                            palette = block_data & 0x3;
+                        }
+                        // tr
+                        else if((row % 4 == 0 || row % 4 == 1) && (col % 4 == 2 || col % 4 == 3)) {
+                            palette = (block_data >> 2) & 0x3;
+                        }
+                        // bl
+                        else if((row % 4 == 2 || row % 4 == 3) && (col % 4 == 0 || col % 4 == 1)) {
+                            palette = (block_data >> 4) & 0x3;
+                        }
+                        // br
+                        else {
+                            palette = (block_data >> 6) & 0x3;
+                        }
+
+                        for(int j = 0; j < 8; j++) {
+                            for(int k = 0; k < 8; k++) {
+                                int hi = ((ppu.chrom[pattern_index + 8 + j] << k) & 0x80) >> 7;
+                                int lo = ((ppu.chrom[pattern_index + j] << k) & 0x80) >> 7;
+                                unsigned char color = (hi << 1) + lo;
+                                int x = (i % 32) * 8;
+                                int y = (i / 32) * 8;
+                                draw(x + k, y + j, palette, color, 0);
+                            }
+                        }
+                    }
                 }
                 for(int i = 0; i < 64; i++) {
                     if(ppu.oam[i * 4] - 1 == ppu.scanline && (ppu.oam[i * 4 + 2] & 0x20) == 0) {
                         // check if sprite rendering enabled
                         if(ppu.mask & 0x10 && ppu.curr < 8) {
-                            //draw(ppu.oam[i * 4 + 3], ppu.oam[i * 4]);
                             draw_sprite(i);
                             ppu.curr++;
                         }
@@ -245,11 +293,6 @@ void ppu_tick_to(int cycle) {
     //SDL_Delay(30);
 }
 
-//
-//
-// TODO: fix palette mod addressing
-//
-//
 unsigned char ppu_read(unsigned short addr) {
     // chrom
     if(addr < 0x2000) {
@@ -257,7 +300,8 @@ unsigned char ppu_read(unsigned short addr) {
     }
     // vram
     else if(addr < 0x3000) {
-        return ppu.vram[addr % 0x3000];
+        addr %= 0x2000;
+        return ppu.vram[addr % 0x0800];
     }
     // palette
     else if(addr >= 0x3F00) {
@@ -276,7 +320,8 @@ void ppu_write(unsigned short addr, unsigned char data) {
     }
     // vram
     else if(addr < 0x3000) {
-        ppu.vram[addr % 0x2000] = data;
+        addr %= 0x2000;
+        ppu.vram[addr % 0x0800] = data;
     }
     // palette
     else if(addr >= 0x3F00) {
@@ -312,7 +357,6 @@ unsigned char data_read() {
 
     // data is from palette, return it immediately
     if(ppu.t >= 0x3F00 && ppu.t <= 0x3FFF) {
-        //ppu.read_buffer = 0;
         ret = new;
     }
     else {

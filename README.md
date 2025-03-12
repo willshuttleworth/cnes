@@ -1,11 +1,21 @@
 ## nes emulator written in C with SDL
 
-* in progress
-* beginning to work on ppu
+### progress 
+
+* [x] CPU
+* PPU
+    * [x] sprites
+    * [x] background
+    * [x] correct colors
+    * [ ] 8x16 sprites
+    * [ ] scrolling
+* [ ] mappers
+* [ ] APU
+* [ ] configurable controls
 
 ### building 
 
-dependencies: SDL2 and gcc 
+dependencies: gcc and SDL2
 
 build steps
 * run `make` from the root of the repo
@@ -20,3 +30,5 @@ this is the default button mapping, which is currently not configurable
 * b => k 
 * select => space
 * start => enter 
+* escape to exit
+

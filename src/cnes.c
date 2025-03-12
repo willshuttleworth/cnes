@@ -7,7 +7,7 @@
 #include "controller.h"
 #include "bus.h"
 
-#define ADDRESS_SPACE 65536 //2^16
+#define ADDRESS_SPACE 65536
 #define PRG_ROM_SIZE 16384
 #define CHR_ROM_SIZE 8192
  
@@ -37,10 +37,11 @@ int main(int argc, char **argv) {
         char *num_blocks = parse_blocks(file);
         
         //allocate memory for cpu/ppu
+        // TODO: change these to stack allocations and/or use arena allocation
         unsigned char *ram = malloc(0x0800);
         unsigned char *rom = malloc(0x8000);
         unsigned char *chrom = malloc(CHR_ROM_SIZE * num_blocks[1]);
-        unsigned char *vram = malloc(VRAM_SIZE);
+        unsigned char *vram = malloc(2048);
         unsigned char palette[PALETTE_SIZE];
         unsigned char *oam = malloc(OAM_SIZE);
         unsigned char *pixels = malloc(256 * 240 * 3);
@@ -57,8 +58,6 @@ int main(int argc, char **argv) {
         controller_setup(controller_state);
         
         while(quit != -1) {
-            //operands[0] = number of operands
-            //operands[1..n] = bytes
             int cycle = exec_instr();
             ppu_tick_to(cycle);
 
