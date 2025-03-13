@@ -128,6 +128,14 @@ void endFrameTimer() {
     fprintf(stderr, "frame time: %.3f ms, FPS: %.2f\n", deltaTime * 1000, fps);
 }
 
+#ifdef SHOWFPS
+    #define START_TIMER() startFrameTimer()
+    #define END_TIMER() endFrameTimer()
+#else
+    #define START_TIMER()
+    #define END_TIMER()
+#endif
+
 // access palette and draw to pixel (x, y) 
 void draw(int x, int y, int palette, int color, int sprite) {
     int pixel = (y * 256 + x) * 3;
@@ -207,7 +215,7 @@ void ppu_tick_to(int cycle) {
             }
             if(ppu.dot == 0 && ppu.scanline < 240) {
                 if(ppu.scanline == -1) {
-                    startFrameTimer();
+                    START_TIMER();
                     ppu.ctrl &= 0xDF;
                     
                     // TODO: this is hardcoded to only use first nametable
@@ -288,9 +296,9 @@ void ppu_tick_to(int cycle) {
         ppu.scanline++;
     }
     ppu.scanline = -1;
-    endFrameTimer();
+    END_TIMER();
     // TODO: how to do dynamic delay to ensure 60fps?
-    //SDL_Delay(30);
+    //SDL_Delay(15);
 }
 
 unsigned char ppu_read(unsigned short addr) {

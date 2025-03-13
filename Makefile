@@ -1,10 +1,10 @@
 TARGET = cnes 
-CC = gcc 
+CC = gcc
 # TODO: compiler optimizations result in incorrect colors (only on macOS?)
-CFLAGS = -Wall -g # -fsanitize=address,undefined
-LDFLAGS = # -fsanitize=address,undefined 
+CFLAGS = -Wall -g
 OUTDIR = .
 DIR_OBJ = ./obj
+DEBUG_CFLAGS = -DDEBUG -DSHOW_FPS
 
 # SDL2 configuration
 CFLAGS += $(shell pkg-config --cflags sdl2)
@@ -15,13 +15,15 @@ SRCS = $(wildcard src/*.c)
 # Create object file names by replacing src/ with obj/ and .c with .o
 OBJS = $(SRCS:src/%.c=$(DIR_OBJ)/%.o)
 
-# Include directory
 INCS = include
 INC_DIRS = -I$(INCS)
 
 .PHONY: all clean echoes
 
 all: $(TARGET)
+
+debug: CFLAGS += $(DEBUG_CFLAGS)
+debug: $(TARGET)
 
 $(TARGET): $(OBJS)
 	$(CC) -o $(OUTDIR)/$@ $(OBJS) $(CFLAGS) $(LDFLAGS)

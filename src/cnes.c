@@ -10,7 +10,7 @@
 #define ADDRESS_SPACE 65536
 #define PRG_ROM_SIZE 16384
 #define CHR_ROM_SIZE 8192
- 
+
 int main(int argc, char **argv) {
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window* window = SDL_CreateWindow("cnes",
@@ -21,11 +21,10 @@ int main(int argc, char **argv) {
     SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24,
     SDL_TEXTUREACCESS_STREAMING, 256, 240);
     int quit = 0;
-
+    
     //read rom from cmdline arg
     if(argc != 2) {
         printf("usage:\t./cnes <path/to/rom/>\n");
-        exit(0);
     }
     else {
         FILE *file = fopen(argv[1], "r"); 
@@ -73,11 +72,6 @@ int main(int argc, char **argv) {
         }
         
         // TODO: clean up the cleanup (arena allocation!)
-        SDL_DestroyTexture(texture);
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-
         free(num_blocks);
         free(ram);
         free(rom);
@@ -88,5 +82,9 @@ int main(int argc, char **argv) {
 
         fclose(file);
     }
+    SDL_DestroyTexture(texture);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
     return 0;
 }

@@ -6,6 +6,13 @@
 #define STACK_TOP 0x1FF
 #define PAGE_SIZE 100
 
+#ifdef DEBUG
+    #define LOG_CPU(args, len) print_cpu(args, len)
+#else
+    #define LOG_CPU(args, len)
+#endif
+    
+
 typedef struct CPU {
     //accumulator
     unsigned char acc;
@@ -1009,7 +1016,7 @@ int exec_instr() {
             break;
         //impl
         case 1:
-            print_cpu(args, 1);
+            LOG_CPU(args, 1);
             if(opcode == 0x00) {
                 brk();
             }
@@ -1115,7 +1122,7 @@ int exec_instr() {
             break;
         //imm
         case 2:
-            print_cpu(args, 2);
+            LOG_CPU(args, 2);
             if(opcode == 0xA2) {
                 ldx(args[1]);
             }
@@ -1157,7 +1164,7 @@ int exec_instr() {
             break;
         //acc
         case 3:
-            print_cpu(args, 1);
+            LOG_CPU(args, 1);
             if(opcode == 0x4A) {
                 cpu.acc = lsr(cpu.acc);
                 set_flags_a();
@@ -1182,7 +1189,8 @@ int exec_instr() {
             addr = args[2];
             addr <<= 8;
             addr |= args[1];
-            print_cpu(args, 3);
+            LOG_CPU(args, 3);
+            LOG_CPU(args, 3);
             if(opcode == 0x4C) {
                 jmp(bus_read(cpu.pc + 1), bus_read(cpu.pc + 2));
                 cpu_cycle -= 1;
@@ -1297,7 +1305,7 @@ int exec_instr() {
             break;
         //abs_x
         case 5:
-            print_cpu(args, 3); 
+            LOG_CPU(args, 3);
             addr = args[2] << 8;
             addr |= args[1];
             if(!same_page(addr, addr + cpu.x)) {
@@ -1426,7 +1434,7 @@ int exec_instr() {
             break;
         //abs_y
         case 6:
-            print_cpu(args, 3); 
+            LOG_CPU(args, 3);
             addr = args[2] << 8;
             addr |= args[1];
             if(!same_page(addr, addr + cpu.y)) {
@@ -1493,11 +1501,10 @@ int exec_instr() {
             break;
         //ind
         case 7:
-            print_cpu(args, 3);
+            LOG_CPU(args, 3);
             addr = (args[2] << 8) | args[1];
             short addr_hi = (args[2] << 8) | args[1];
             short addr_lo = (args[2] << 8) | (unsigned char)(args[1] + 1);
-            //printf("addr: %x\thi: %x\tlo: %x\n", addr, addr_hi, addr_lo);
             if(opcode == 0x6C) {
                 jmp(bus_read(addr_hi), bus_read(addr_lo));
             }
@@ -1505,7 +1512,7 @@ int exec_instr() {
             break;
         //x_ind
         case 8:
-            print_cpu(args, 2);
+            LOG_CPU(args, 2);
             addr = bus_read((cpu.x + args[1] + 1) % 256) << 8;
             addr |= bus_read((cpu.x + args[1]) % 256);
             if(opcode == 0xA1) {
@@ -1567,7 +1574,7 @@ int exec_instr() {
             break;
         //ind_y
         case 9:
-            print_cpu(args, 2);
+            LOG_CPU(args, 2);
             int int_addr = bus_read((args[1] + 1) % 256) << 8;
             int_addr |= bus_read(args[1]);
             if(!same_page(int_addr, int_addr + cpu.y)) {
@@ -1655,7 +1662,7 @@ int exec_instr() {
             break;
         //rel
         case 10:
-            print_cpu(args, 2);
+            LOG_CPU(args, 2);
             if(opcode == 0xB0) {
                 bcs(bus_read(cpu.pc + 1));
             }
@@ -1683,7 +1690,7 @@ int exec_instr() {
             break;
         //zpg
         case 11:
-            print_cpu(args, 2);
+            LOG_CPU(args, 2);
             addr = (short) args[1];
             if(opcode == 0x86) {
                 stx(addr);
@@ -1789,7 +1796,7 @@ int exec_instr() {
             break;
         //zpg_x
         case 12:
-            print_cpu(args, 2);
+            LOG_CPU(args, 2);
             addr = (unsigned char) (cpu.x + args[1]);
             if(opcode == 0xB4) {
                 ldy(bus_read(addr));
@@ -1874,7 +1881,7 @@ int exec_instr() {
             break;
         //zpg_y
         case 13:
-            print_cpu(args, 2);
+            LOG_CPU(args, 2);
             addr = (unsigned char) (cpu.y + args[1]);
             if(opcode == 0xB6) {
                 ldx(bus_read(addr));

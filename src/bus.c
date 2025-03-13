@@ -2,6 +2,12 @@
 #include "ppu.h"
 #include "controller.h"
 
+#ifdef DEBUG
+    #define DEBUG_PRINT(s) printf(s)
+#else
+    #define DEBUG_PRINT(s) 
+#endif
+
 const int PRG_ROM_SIZE = 16384; // 2^14
 const int CHR_ROM_SIZE = 8192; // 2^13
 
@@ -33,29 +39,29 @@ unsigned char bus_read(unsigned short addr) {
         switch(addr) {
             // ctrl
             case 0:
-                perror("attempting to read from write only address (PPUCTRL)");
+                DEBUG_PRINT("attempting to read from write only address (PPUCTRL)\n");
                 break;
             // mask
             case 1:
-                perror("attempting to read from write only address (PPUMASK)");
+                DEBUG_PRINT("attempting to read from write only address (PPUMASK)\n");
                 break;
             // status
             case 2:
                 return status_read();
             // oam addr
             case 3:
-                perror("attempting to read from write only address (OAMADDR)");
+                DEBUG_PRINT("attempting to read from write only address (OAMADDR)\n");
                 break;
             // oam data
             case 4:
                 return oamdata_read();
             // scroll
             case 5:
-                perror("attempting to read from write only address (PPUSCROLL)");
+                DEBUG_PRINT("attempting to read from write only address (PPUSCROLL)\n");
                 break;
             // addr
             case 6:
-                perror("attempting to read from write only address (PPUADDR)");
+                DEBUG_PRINT("attempting to read from write only address (PPUADDR)\n");
                 break;
             // data
             case 7:
@@ -63,9 +69,13 @@ unsigned char bus_read(unsigned short addr) {
         }
         
     }
-    // joypad
+    // joypad 1
     else if(addr == 0x4016) {
         return controller_read();
+    }
+    // joypad 2
+    else if(addr == 0x4017) {
+        return 0;
     }
     // cart rom
     else if(addr >= 0x8000) {
@@ -73,7 +83,7 @@ unsigned char bus_read(unsigned short addr) {
         return mem.rom[addr];
     }
     else {
-        printf("ERROR: tried to access address %x\n", addr); 
+        return 0;
     }
     return 0;
 }
@@ -99,7 +109,7 @@ void bus_write(unsigned short addr, unsigned char data) {
                 break;
             // status
             case 2:
-                perror("attempting to write to read only address (PPUSTATUS)");
+                DEBUG_PRINT("attempting to write to read only address (PPUSTATUS)\n");
                 break;
             // oam addr
             case 3:
@@ -123,11 +133,15 @@ void bus_write(unsigned short addr, unsigned char data) {
                 break;
         }
     }
-    // joypad
+    // joypad 1
     else if(addr == 0x4016) {
         set_strobe(data);
     }
+    // joypad 2
+    else if(addr == 0x4017) {
+        return;
+    }
     else {
-        printf("ERROR: tried to write %x to address %x\n", data, addr); 
+        return;
     }
 }
