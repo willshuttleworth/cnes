@@ -15,7 +15,7 @@
 
 ### building 
 
-dependencies: gcc and SDL2
+dependencies: gcc, SDL2, and pkg-config (for cross platform SDL flags)
 
 build steps
 * run `make` from the root of the repo
