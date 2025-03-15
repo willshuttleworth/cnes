@@ -2,9 +2,7 @@
 #include <stdlib.h>
 #include <sys/stat.h> //fstat
 #include "ppu.h"
-
-#define PRG_ROM_SIZE 16384  //2^14
-#define CHR_ROM_SIZE 8192  //2^13
+#include "cnes.h"
 
 #define IMPL_LEN 43
 #define IMM_LEN 24

@@ -1,15 +1,13 @@
 #include <stdio.h>
 #include "ppu.h"
 #include "controller.h"
+#include "cnes.h"
 
 #ifdef DEBUG
     #define DEBUG_PRINT(s) printf(s)
 #else
     #define DEBUG_PRINT(s) 
 #endif
-
-const int PRG_ROM_SIZE = 16384; // 2^14
-const int CHR_ROM_SIZE = 8192; // 2^13
 
 typedef struct Mem {
     unsigned char *cpu_ram;  

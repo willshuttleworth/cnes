@@ -13,9 +13,3 @@ unsigned char status_read();
 void oamaddr_write(unsigned char data);
 unsigned char oamdata_read();
 void oamdata_write(unsigned char data);
-
-#define CHROM_SIZE 8192
-#define VRAM_SIZE 2048
-#define PALETTE_SIZE 32
-#define OAM_SIZE 256
-

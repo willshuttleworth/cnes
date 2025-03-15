@@ -2,14 +2,11 @@
 #include <stdlib.h>
 #include <SDL2/SDL.h>
 
+#include "cnes.h"
 #include "parser.h"
 #include "cpu.h"
 #include "controller.h"
 #include "bus.h"
-
-#define ADDRESS_SPACE 65536
-#define PRG_ROM_SIZE 16384
-#define CHR_ROM_SIZE 8192
 
 int main(int argc, char **argv) {
     SDL_Init(SDL_INIT_VIDEO);
@@ -20,9 +17,7 @@ int main(int argc, char **argv) {
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24,
     SDL_TEXTUREACCESS_STREAMING, 256, 240);
-    int quit = 0;
     
-    //read rom from cmdline arg
     if(argc != 2) {
         printf("usage:\t./cnes <path/to/rom/>\n");
     }
@@ -34,28 +29,32 @@ int main(int argc, char **argv) {
         }
         //find number of prg(16kb)/chr(8kb) rom blocks 
         char *num_blocks = parse_blocks(file);
-        
-        //allocate memory for cpu/ppu
-        // TODO: change these to stack allocations and/or use arena allocation
-        unsigned char *ram = malloc(0x0800);
-        unsigned char *rom = malloc(0x8000);
-        unsigned char *chrom = malloc(CHR_ROM_SIZE * num_blocks[1]);
-        unsigned char *vram = malloc(2048);
+
+        unsigned char ram[CPU_RAM_SIZE];
+        memset(ram, 0, CPU_RAM_SIZE);
+        unsigned char rom[ROM_SIZE];
+        memset(rom, 0, ROM_SIZE);
+        unsigned char chrom[CHR_ROM_SIZE * num_blocks[1]];
+        memset(chrom, 0, CHR_ROM_SIZE * num_blocks[1]);
+        unsigned char vram[VRAM_SIZE];
+        memset(vram, 0, VRAM_SIZE);
         unsigned char palette[PALETTE_SIZE];
-        unsigned char *oam = malloc(OAM_SIZE);
-        unsigned char *pixels = malloc(256 * 240 * 3);
-        unsigned char controller_state[8];
         memset(palette, 0, PALETTE_SIZE);
+        unsigned char oam[OAM_SIZE];
+        memset(oam, 0, OAM_SIZE);
+        unsigned char pixels[256 * 240 * 3];
+        memset(pixels, 0, 256 * 240 * 3);
+        unsigned char controller_state[8];
         memset(controller_state, 0, 8);
         
         int nmi = 0;
         parse_instructions(file, rom, chrom, num_blocks[0], num_blocks[1]);
-        //pass rom info to cpu and ppu
         ppu_setup(chrom, vram, palette, oam, &nmi, texture, renderer, pixels);
         bus_setup(ram, rom);
         cpu_setup(oam, &nmi);
         controller_setup(controller_state);
         
+        int quit = 0;
         while(quit != -1) {
             int cycle = exec_instr();
             ppu_tick_to(cycle);
@@ -63,23 +62,10 @@ int main(int argc, char **argv) {
             SDL_Event event;
             if(nmi) {
                 while (SDL_PollEvent(&event)) {
-                    if(handle_input(&event) == -1) {
-                        quit = -1;
-                        break;
-                    }
+                    quit = handle_input(&event);
                 }
             }
         }
-        
-        // TODO: clean up the cleanup (arena allocation!)
-        free(num_blocks);
-        free(ram);
-        free(rom);
-        free(chrom);
-        free(vram);
-        free(oam);
-        free(pixels);
-
         fclose(file);
     }
     SDL_DestroyTexture(texture);
