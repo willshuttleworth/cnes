@@ -4,11 +4,9 @@
 
 #include "ppu.h"
 
-#ifdef SHOWFPS
-    #define START_TIMER() startFrameTimer()
-    #define END_TIMER() endFrameTimer()
+#ifdef SHOW_FPS
+    #define END_TIMER() end_frame_timer()
 #else
-    #define START_TIMER()
     #define END_TIMER()
 #endif
 
@@ -30,22 +28,25 @@ void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette
     ppu.pixels = pixels;
 }
 
-Uint64 lastTime = 0;
-double deltaTime = 0;
-double fps = 0;
+static Uint64 last_time = 0;
 
-void startFrameTimer() {
-    lastTime = SDL_GetPerformanceCounter();
+void start_frame_timer() {
+    last_time = SDL_GetPerformanceCounter();
 }
 
-void endFrameTimer() {
-    Uint64 currentTime = SDL_GetPerformanceCounter();
+double elapsed_time() {
+    Uint64 current_time = SDL_GetPerformanceCounter();
     Uint64 freq = SDL_GetPerformanceFrequency();
+    double delta_time = (double)(current_time - last_time) / freq;  
+    return delta_time * 1000;
+}
 
-    deltaTime = (double)(currentTime - lastTime) / freq;  
-    fps = 1.0 / deltaTime;
-
-    fprintf(stderr, "frame time: %.3f ms, FPS: %.2f\n", deltaTime * 1000, fps);
+void end_frame_timer() {
+    Uint64 current_time = SDL_GetPerformanceCounter();
+    Uint64 freq = SDL_GetPerformanceFrequency();
+    double delta_time = (double)(current_time - last_time) / freq;  
+    double fps = 1.0 / delta_time;
+    fprintf(stderr, "frame time: %.3f ms, FPS: %.2f\n", delta_time * 1000, fps);
 }
 
 // access palette and draw to pixel (x, y) 
@@ -116,6 +117,9 @@ void draw_sprite(int index) {
 }
 
 void ppu_tick_to(int cycle) {
+    if(ppu.scanline == -1 && ppu.dot == 0) {
+       start_frame_timer(); 
+    }
     while(ppu.scanline <= 260) {
         // read oam, find sprites on this scanline
         ppu.curr = 0;
@@ -125,7 +129,6 @@ void ppu_tick_to(int cycle) {
             }
             if(ppu.dot == 0 && ppu.scanline < 240) {
                 if(ppu.scanline == -1) {
-                    START_TIMER();
                     ppu.ctrl &= 0xDF;
                     
                     // TODO: this is hardcoded to only use first nametable
@@ -206,9 +209,9 @@ void ppu_tick_to(int cycle) {
         ppu.scanline++;
     }
     ppu.scanline = -1;
+    double elapsed = elapsed_time();
+    SDL_Delay(16 - elapsed);
     END_TIMER();
-    // TODO: how to do dynamic delay to ensure 60fps?
-    SDL_Delay(10);
 }
 
 unsigned char ppu_read(unsigned short addr) {
