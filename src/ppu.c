@@ -2,98 +2,17 @@
 #include <time.h>
 #include <SDL2/SDL.h>
 
-static const unsigned char colors[64][3] = {
-    {0x80, 0x80, 0x80}, {0x00, 0x3D, 0xA6}, {0x00, 0x12, 0xB0}, {0x44, 0x00, 0x96},
-    {0xA1, 0x00, 0x5E}, {0xC7, 0x00, 0x28}, {0xBA, 0x06, 0x00}, {0x8C, 0x17, 0x00},
-    {0x5C, 0x2F, 0x00}, {0x10, 0x45, 0x00}, {0x05, 0x4A, 0x00}, {0x00, 0x47, 0x2E},
-    {0x00, 0x41, 0x66}, {0x00, 0x00, 0x00}, {0x05, 0x05, 0x05}, {0x05, 0x05, 0x05},
+#include "ppu.h"
 
-    {0xC7, 0xC7, 0xC7}, {0x00, 0x77, 0xFF}, {0x21, 0x55, 0xFF}, {0x82, 0x37, 0xFA},
-    {0xEB, 0x2F, 0xB5}, {0xFF, 0x29, 0x50}, {0xFF, 0x22, 0x00}, {0xD6, 0x32, 0x00},
-    {0xC4, 0x62, 0x00}, {0x35, 0x80, 0x00}, {0x05, 0x8F, 0x00}, {0x00, 0x8A, 0x55},
-    {0x00, 0x99, 0xCC}, {0x21, 0x21, 0x21}, {0x09, 0x09, 0x09}, {0x09, 0x09, 0x09},
+#ifdef SHOWFPS
+    #define START_TIMER() startFrameTimer()
+    #define END_TIMER() endFrameTimer()
+#else
+    #define START_TIMER()
+    #define END_TIMER()
+#endif
 
-    {0xFF, 0xFF, 0xFF}, {0x0F, 0xD7, 0xFF}, {0x69, 0xA2, 0xFF}, {0xD4, 0x80, 0xFF},
-    {0xFF, 0x45, 0xF3}, {0xFF, 0x61, 0x8B}, {0xFF, 0x88, 0x33}, {0xFF, 0x9C, 0x12},
-    {0xFA, 0xBC, 0x20}, {0x9F, 0xE3, 0x0E}, {0x2B, 0xF0, 0x35}, {0x0C, 0xF0, 0xA4},
-    {0x05, 0xFB, 0xFF}, {0x5E, 0x5E, 0x5E}, {0x0D, 0x0D, 0x0D}, {0x0D, 0x0D, 0x0D},
-
-    {0xFF, 0xFF, 0xFF}, {0xA6, 0xFC, 0xFF}, {0xB3, 0xEC, 0xFF}, {0xDA, 0xAB, 0xEB},
-    {0xFF, 0xA8, 0xF9}, {0xFF, 0xAB, 0xB3}, {0xFF, 0xD2, 0xB0}, {0xFF, 0xEF, 0xA6},
-    {0xFF, 0xF7, 0x9C}, {0xD7, 0xE8, 0x95}, {0xA6, 0xED, 0xAF}, {0xA2, 0xF2, 0xDA},
-    {0x99, 0xFF, 0xFC}, {0xDD, 0xDD, 0xDD}, {0x11, 0x11, 0x11}, {0x11, 0x11, 0x11}
-};
-
-typedef struct PPU {
-    //sprites as bitmap images (pattern tables)
-    unsigned char *chrom;
-    //layout (nametables)
-    unsigned char *vram;
-    //colors
-    unsigned char *palette;
-    //sprite positioning (not part of ppu mmap, accessed independently)
-    unsigned char *oam;
-    // pointer to next open spot in oam2
-    int curr;
-
-    //registers
-    unsigned char ctrl;
-    unsigned char mask;
-    unsigned char status;
-    unsigned char oamaddr;
-    unsigned char oamdata;
-    unsigned char scroll;
-    unsigned char addr;
-    unsigned char data;
-    unsigned short v;
-    unsigned short t;
-    unsigned char w;
-
-    unsigned char read_buffer;
-
-    int ppu_cycle;
-    int *nmi;
-
-    // -1 to 260
-    int scanline;
-    // 1 to 340
-    int dot;
-
-    //sdl 
-    SDL_Texture *texture;
-    SDL_Renderer *renderer;
-    unsigned char *pixels;
-} PPU;
-
-PPU ppu = {
-    .chrom = 0,
-    .vram = 0,
-    .palette = 0,
-    .oam = 0,
-    .curr = 0,
-
-    .ctrl = 0,
-    .mask = 0,
-    .status = 0,
-    .oamaddr = 0,
-    .oamdata = 0,
-    .scroll = 0,
-    .addr = 0,
-    .data = 0,
-    .v = 0,
-    .t = 0,
-    .w = 0,
-
-    .read_buffer = 0,
-    .ppu_cycle = 0,
-    .nmi = NULL,
-
-    .scanline = -1,
-    .dot = 0,
-    .texture = NULL,
-    .renderer = NULL,
-    .pixels = NULL,
-};
+static PPU ppu;
 
 void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette, unsigned char *oam, int *nmi, SDL_Texture *texture, SDL_Renderer *renderer, unsigned char *pixels) {
     ppu.chrom = chrom;
@@ -102,6 +21,7 @@ void ppu_setup(unsigned char *chrom, unsigned char *vram, unsigned char *palette
     ppu.oam = oam;
     ppu.nmi = nmi;
     // vblank
+    ppu.scanline = -1;
     ppu.status = 0x80;
     *ppu.nmi = 0;
     //sdl 
@@ -128,14 +48,6 @@ void endFrameTimer() {
     fprintf(stderr, "frame time: %.3f ms, FPS: %.2f\n", deltaTime * 1000, fps);
 }
 
-#ifdef SHOWFPS
-    #define START_TIMER() startFrameTimer()
-    #define END_TIMER() endFrameTimer()
-#else
-    #define START_TIMER()
-    #define END_TIMER()
-#endif
-
 // access palette and draw to pixel (x, y) 
 void draw(int x, int y, int palette, int color, int sprite) {
     int pixel = (y * 256 + x) * 3;
@@ -149,9 +61,9 @@ void draw(int x, int y, int palette, int color, int sprite) {
     unsigned char sys_color = ppu.palette[palette_addr];
     // only drawing white pixels, not background ones
     if(color != 0) {
-        ppu.pixels[pixel] = colors[sys_color][0];
-        ppu.pixels[pixel + 1] = colors[sys_color][1];
-        ppu.pixels[pixel + 2] = colors[sys_color][2];
+        ppu.pixels[pixel] = SYS_COLORS[sys_color][0];
+        ppu.pixels[pixel + 1] = SYS_COLORS[sys_color][1];
+        ppu.pixels[pixel + 2] = SYS_COLORS[sys_color][2];
     }
 }
 
@@ -162,7 +74,6 @@ void draw(int x, int y, int palette, int color, int sprite) {
 void draw_sprite(int index) {
     int x = ppu.oam[index * 4 + 3];
     int y = ppu.oam[index * 4];
-    // TODO: get rid of double shifts, just shift left at first prob
     int flip_x = ((ppu.oam[index * 4 + 2] << 1) & 0x80) >> 7;
     int flip_y = (ppu.oam[index * 4 + 2] & 0x80) >> 7;
     unsigned short pattern_index = ppu.oam[index * 4 + 1];
@@ -184,7 +95,6 @@ void draw_sprite(int index) {
                 else       { j++; rev_j--; }
                 continue;
             }
-            // TODO: get rid of double shifts, just shift left at first prob
             int hi = ((ppu.chrom[pattern_index + 8 + i] << j) & 0x80) >> 7;
             int lo = ((ppu.chrom[pattern_index + i] << j) & 0x80) >> 7;
             unsigned char color = (hi << 1) + lo;
@@ -298,7 +208,7 @@ void ppu_tick_to(int cycle) {
     ppu.scanline = -1;
     END_TIMER();
     // TODO: how to do dynamic delay to ensure 60fps?
-    //SDL_Delay(15);
+    SDL_Delay(10);
 }
 
 unsigned char ppu_read(unsigned short addr) {

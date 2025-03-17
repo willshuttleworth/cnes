@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include "parser.h"
 #include "bus.h"
+#include "cpu.h"
 
 #define STACK_TOP 0x1FF
 #define PAGE_SIZE 100
@@ -12,64 +13,22 @@
     #define LOG_CPU(args, len)
 #endif
     
+static CPU cpu;
 
-typedef struct CPU {
-    //accumulator
-    unsigned char acc;
-    //index register x
-    unsigned char x;
-    //index register y
-    unsigned char y;
-    //program counter
-    unsigned short pc;
-    //needs to be 8bits and normal for testing purposes. hi byte is always 0x01 so stack address is 0x01(sp) ex: 0x01FF
-    //stack pointer is decreased on pushes and increased on pops
-    //sp points to next available stack location, so it starts at 0xFF, and negative 1 means full stack
-    short sp; 
+void push(unsigned char byte);
 
-    //processor status:
-    
-    //carry flag
-    char cf;
-    //zero flag
-    char zf;
-    //interrupt disable
-    char id;
-    //decimal mode
-    char dm;
-    //break command
-    char brk;
-    //overflow flag
-    char of;
-    //negative flag
-    char neg;
-
-    //copy of oam for dma
-    unsigned char *oam;
-
-    int *nmi;
-}CPU;
-
-//stack is 0x100 to 0x1FF, next stack address is mem[STACK_TOP - stack_ptr]
-//stack grows down from STACK_TOP(0x1FF)
-int cpu_cycle;
-
-CPU cpu = { 
-            .acc = 0,
-            .x = 0,
-            .y = 0,
-            .pc = 0,
-            .sp = 0xFF,
-            .cf = 0,
-            .zf = 0,
-            .id = 1,
-            .dm = 0,
-            .brk = 0,
-            .of = 0,
-            .neg = 0,
-            .oam = NULL,
-            .nmi = NULL,
-};
+void cpu_setup(unsigned char *oam, int *nmi) {
+    cpu.oam = oam;
+    cpu.nmi = nmi;
+    cpu.sp = 0xFF;
+    cpu.id = 1;
+    push(0);
+    push(0);
+    cpu.pc = bus_read(0xFFFD);
+    cpu.pc <<= 8;
+    cpu.pc |= bus_read(0xFFFC);
+    cpu.cycle = 7;
+}
 
 //encode all status registers as single byte
 unsigned char encode_status() {
@@ -182,7 +141,7 @@ void print_cpu(unsigned char *args, int len) {
     else {
         printf("       ");
     }
-    printf("A:%02X X:%02X Y:%02X P:%02X SP:%X CYC:%d\n", (unsigned char) cpu.acc, cpu.x, cpu.y, encode_status(), cpu.sp, cpu_cycle);
+    printf("A:%02X X:%02X Y:%02X P:%02X SP:%X CYC:%d\n", (unsigned char) cpu.acc, cpu.x, cpu.y, encode_status(), cpu.sp, cpu.cycle);
 }
 
 //are addresses on same page?
@@ -198,10 +157,10 @@ int same_page(short address1, short address2) {
 void branch(char offset) {
     //3 or 4 cycles depending on page boundary
     if(same_page(cpu.pc + 2, cpu.pc + 2 + offset)) {
-        cpu_cycle += 3;
+        cpu.cycle += 3;
     }
     else {
-        cpu_cycle += 4;
+        cpu.cycle += 4;
     }
     cpu.pc = (short) cpu.pc;
     cpu.pc += (char) offset;
@@ -246,12 +205,6 @@ void set_flags_y() {
     cpu.neg = cpu.y >> 7;
 }
 
-//push/pop stuff from stack
-//stack pointer points to last occupied stack pos
-//push: move everything from STACK_TOP to stack_pointer down one address, put new value at mem[STACK_TOP]
-//  overflow: if stack pointer is already 255, then another push would overflow (is overflow an error that is ignored on 6502?)
-//pop: save mem[STACK_TOP], move everything from STACK_TOP-1 to stack_pointer up one address, return saved value
-//  underflow: stack pointer is negative (should only ever be -1) and a pop was called
 void push(unsigned char byte) {
     //overflow
     if(cpu.sp < 0) {
@@ -272,9 +225,8 @@ void push_word(short word) {
 unsigned char pop() {
     if(cpu.sp == 0xFF) {
         puts("stack underflow"); 
-        exit(0); //is there a sentinel value that could be returned instead of crashing?
+        exit(1);
     }
-    
     cpu.sp += 1;
     return bus_read(cpu.sp + 0x100);
 }
@@ -299,48 +251,6 @@ void print_stack() {
     printf("\n");
 }
 
-
-//stack tests:
-//  - add one to empty stack
-//  - pop one
-//  - fill stack with increasing numbers
-//  - overflow
-//  - pop all 
-//  - underflow
-void stack_test() {
-    print_stack(); //stack should start off empty
-    push(0);
-    print_stack(); //should contain one zero
-    for(int i = 1; i < 256; i++) {
-        push((unsigned char) i);
-    }
-    print_stack();
-    push(5); //should print overflow warning
-    //print_stack(); //should be full
-    for(int i = 0; i < 256; i++) {
-        printf("popped %x\n", pop());
-        print_stack();
-    }
-    //pop(); //should underflow
-    push_word(0x1234);
-    print_stack();
-    printf("%x\n", pop_word());
-    print_stack();
-}
-
-void cpu_setup(unsigned char *oam, int *nmi) {
-    cpu.oam = oam;
-    cpu.nmi = nmi;
-    //cpu_cycle = 0;
-    push(0);
-    push(0);
-    //take 7 cycles to set pc to value in mem[0xFFFC/D]
-    cpu.pc = bus_read(0xFFFD);
-    cpu.pc <<= 8;
-    cpu.pc |= bus_read(0xFFFC);
-    cpu_cycle = 7;
-}
-
 //BRK impl: generates interrupt
 void brk() {
     //technically a 2 byte instruction, so next pc is pc+2
@@ -357,7 +267,7 @@ void brk() {
     cpu.pc = bus_read(0xFFFF);
     cpu.pc <<= 8;
     cpu.pc |= bus_read(0xFFFE);
-    cpu_cycle += 7;
+    cpu.cycle += 7;
     cpu.brk = 0; 
     return;
 }
@@ -367,13 +277,13 @@ void rti() {
     decode_status(pop());
 
     cpu.pc = pop_word();
-    cpu_cycle += 6;
+    cpu.cycle += 6;
 }
 
 //CLC impl: set carry flag to zero
 void clc() {
     cpu.cf = 0;
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     cpu.pc += 1;
     return;
 }
@@ -382,14 +292,14 @@ void clc() {
 void sec() {
     cpu.cf = 1;
 
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     cpu.pc += 1;
     return;
 }
 
 //NOP
 void nop() {
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     cpu.pc += 1;
     return;
 }
@@ -397,7 +307,7 @@ void nop() {
 //RTS: return from subroutine
 void rts() {
     cpu.pc = pop_word() + 1;
-    cpu_cycle += 6;
+    cpu.cycle += 6;
     if(cpu.pc == 0x01) {
         exit(0);
     }
@@ -407,7 +317,7 @@ void rts() {
 //SEI: set id
 void sei() {
     cpu.id = 1; 
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     cpu.pc += 1;
     return;
 }
@@ -415,7 +325,7 @@ void sei() {
 //SED: set df
 void sed() {
     cpu.dm = 1; 
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     cpu.pc += 1;
     return;
 }
@@ -423,7 +333,7 @@ void sed() {
 //CLD: clear df
 void cld() {
     cpu.dm = 0; 
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     cpu.pc += 1;
     return;
 }
@@ -432,7 +342,7 @@ void cld() {
 void php() {
     //bits 4 and 5 are always pushed as 1s
     push(encode_status() | 0x10);
-    cpu_cycle += 3;
+    cpu.cycle += 3;
     cpu.pc += 1;
     return;
 }
@@ -442,7 +352,7 @@ void pla() {
     cpu.acc = pop();
     set_flags_a();
     cpu.pc += 1;
-    cpu_cycle += 4;
+    cpu.cycle += 4;
     return;
 }
 
@@ -450,7 +360,7 @@ void pla() {
 void pha() {
     push(cpu.acc);
     cpu.pc += 1;
-    cpu_cycle += 3;
+    cpu.cycle += 3;
     return;
 }
 
@@ -458,7 +368,7 @@ void pha() {
 void plp() {
     decode_status(pop());
     cpu.pc += 1;
-    cpu_cycle += 4;
+    cpu.cycle += 4;
     return;
 }
 
@@ -466,7 +376,7 @@ void plp() {
 void clv() {
     cpu.of = 0;
     cpu.pc += 1;
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     return;
 }
 
@@ -475,7 +385,7 @@ void inx() {
     cpu.x += 1;
     set_flags_x();
     cpu.pc += 1;
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     return;
 }
 
@@ -484,7 +394,7 @@ void iny() {
     cpu.y += 1;
     set_flags_y();
     cpu.pc += 1;
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     return;
 }
 
@@ -493,7 +403,7 @@ void tax() {
     cpu.x = cpu.acc;
     set_flags_x();
     cpu.pc += 1;
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     return;
 }
 
@@ -502,7 +412,7 @@ void tay() {
     cpu.y = cpu.acc;
     set_flags_y();
     cpu.pc += 1;
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     return;
 }
 
@@ -511,7 +421,7 @@ void tya() {
     cpu.acc = cpu.y;
     set_flags_a();
     cpu.pc += 1;
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     return;
 }
 
@@ -520,7 +430,7 @@ void txa() {
     cpu.acc = cpu.x;
     set_flags_a();
     cpu.pc += 1;
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     return;
 }
 
@@ -528,7 +438,7 @@ void txa() {
 void txs() {
     cpu.sp = cpu.x;
     cpu.pc += 1;
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     return;
 }
 
@@ -537,7 +447,7 @@ void tsx() {
     cpu.x = cpu.sp;
     set_flags_x();
     cpu.pc += 1;
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     return;
 }
 
@@ -546,7 +456,7 @@ void dex() {
     cpu.x -= 1;
     set_flags_x();
     cpu.pc += 1;
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     return;
 }
 
@@ -555,7 +465,7 @@ void dey() {
     cpu.y -= 1;
     set_flags_y();
     cpu.pc += 1;
-    cpu_cycle += 2;
+    cpu.cycle += 2;
     return;
 }
 
@@ -738,7 +648,7 @@ void bcs(unsigned char offset) {
     }
     //not branching
     else {
-        cpu_cycle += 2;
+        cpu.cycle += 2;
     }
     cpu.pc += 2;
     return;
@@ -751,7 +661,7 @@ void bcc(unsigned char offset) {
     }
     //not branching
     else {
-        cpu_cycle += 2;
+        cpu.cycle += 2;
     }
     cpu.pc += 2;
     return;
@@ -764,7 +674,7 @@ void beq(unsigned char offset) {
     }
     //not branching
     else {
-        cpu_cycle += 2;
+        cpu.cycle += 2;
     }
     cpu.pc += 2;
     return;
@@ -777,7 +687,7 @@ void bne(unsigned char offset) {
     }
     //not branching
     else {
-        cpu_cycle += 2;
+        cpu.cycle += 2;
     }
     cpu.pc += 2;
     return;
@@ -790,7 +700,7 @@ void bvs(unsigned char offset) {
     }
     //not branching
     else {
-        cpu_cycle += 2;
+        cpu.cycle += 2;
     }
     cpu.pc += 2;
     return;
@@ -803,7 +713,7 @@ void bvc(unsigned char offset) {
     }
     //not branching
     else {
-        cpu_cycle += 2;
+        cpu.cycle += 2;
     }
     cpu.pc += 2;
     return;
@@ -816,7 +726,7 @@ void bpl(unsigned char offset) {
     }
     //not branching
     else {
-        cpu_cycle += 2;
+        cpu.cycle += 2;
     }
     cpu.pc += 2;
     return;
@@ -829,7 +739,7 @@ void bmi(unsigned char offset) {
     }
     //not branching
     else {
-        cpu_cycle += 2;
+        cpu.cycle += 2;
     }
     cpu.pc += 2;
     return;
@@ -851,11 +761,11 @@ void sty(short addr) {
 
 // add cycles for dma, including existing ones accounted for by the addressing mode
 void dma_clock_cycles(int existing) {
-    if(cpu_cycle % 2 == 0) {
-       cpu_cycle += (513 - existing); 
+    if(cpu.cycle % 2 == 0) {
+       cpu.cycle += (513 - existing); 
     }
     else {
-       cpu_cycle += (514 - existing); 
+       cpu.cycle += (514 - existing); 
     }
 }
 
@@ -996,14 +906,14 @@ void rra(short addr) {
 
 int exec_instr() {
     if(*cpu.nmi == 1) {
-        cpu_cycle = 0;
+        cpu.cycle = 0;
         push_word(cpu.pc);
         push(encode_status() | 0x10);
 
         cpu.pc = bus_read(0xFFFB) << 8;
         cpu.pc |= bus_read(0xFFFA);
         *cpu.nmi = 0;
-        cpu_cycle += 7;
+        cpu.cycle += 7;
     }
     unsigned char opcode = bus_read(cpu.pc);
     unsigned char args[3] = {opcode, bus_read(cpu.pc + 1), bus_read(cpu.pc + 2)};
@@ -1092,32 +1002,32 @@ int exec_instr() {
             else if(opcode == 0x1A) {
                 //nop
                 cpu.pc++;
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x3A) {
                 //nop
                 cpu.pc++;
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x5A) {
                 //nop
                 cpu.pc++;
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x7A) {
                 //nop
                 cpu.pc++;
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0xDA) {
                 //nop
                 cpu.pc++;
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0xFA) {
                 //nop
                 cpu.pc++;
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             break;
         //imm
@@ -1160,7 +1070,7 @@ int exec_instr() {
                 sbc(args[1]);
             }
             cpu.pc += 2;
-            cpu_cycle += 2;
+            cpu.cycle += 2;
             break;
         //acc
         case 3:
@@ -1182,7 +1092,7 @@ int exec_instr() {
                 set_flags_a();
             }
             cpu.pc++;
-            cpu_cycle += 2;
+            cpu.cycle += 2;
             break;
         //abs
         case 4:
@@ -1193,12 +1103,12 @@ int exec_instr() {
             LOG_CPU(args, 3);
             if(opcode == 0x4C) {
                 jmp(bus_read(cpu.pc + 1), bus_read(cpu.pc + 2));
-                cpu_cycle -= 1;
+                cpu.cycle -= 1;
                 cpu.pc -= 3;
             }
             else if(opcode == 0x20) {
                 jsr(bus_read(cpu.pc + 1), bus_read(cpu.pc + 2));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
                 cpu.pc -= 3;
             }
             else if(opcode == 0x8E) {
@@ -1245,19 +1155,19 @@ int exec_instr() {
             }
             else if(opcode == 0xEE) {
                 inc(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0xCE) {
                 dec(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0xCF) {
                 dcp(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0xEF) {
                 isc(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x6D) {
                 adc(bus_read(addr));
@@ -1270,37 +1180,37 @@ int exec_instr() {
             }
             else if(opcode == 0x4E) {
                 bus_write(addr, lsr(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x0E) {
                 bus_write(addr, asl(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x6E) {
                 bus_write(addr, ror(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x2E) {
                 bus_write(addr, rol(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x0F) {
                 slo(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x2F) {
                 rla(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x4F) {
                 sre(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x6F) {
                 rra(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
-            cpu_cycle += 4;
+            cpu.cycle += 4;
             cpu.pc += 3;
             break;
         //abs_x
@@ -1309,7 +1219,7 @@ int exec_instr() {
             addr = args[2] << 8;
             addr |= args[1];
             if(!same_page(addr, addr + cpu.x)) {
-                cpu_cycle += 1;
+                cpu.cycle += 1;
             }
             addr += cpu.x;
             if(opcode == 0xBD) {
@@ -1317,7 +1227,7 @@ int exec_instr() {
             }
             else if(opcode == 0x9D) {
                 if(same_page(addr, addr - cpu.x)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                     sta(addr, 5);
                 }
                 else {
@@ -1347,90 +1257,90 @@ int exec_instr() {
             }
             else if(opcode == 0x5E) {
                 bus_write(addr, lsr(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
             }
             else if(opcode == 0x1E) {
                 bus_write(addr, asl(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
             }
             else if(opcode == 0x7E) {
                 bus_write(addr, ror(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
             }
             else if(opcode == 0x3E) {
                 bus_write(addr, rol(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
             }
             else if(opcode == 0xFE) {
                 inc(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
             }
             else if(opcode == 0xDE) {
                 dec(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
             }
             else if(opcode == 0xDF) {
                 dcp(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
             }
             else if(opcode == 0xFF) {
                 isc(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
             }
             else if(opcode == 0x1F) {
                 slo(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
             }
             else if(opcode == 0x3F) {
                 rla(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
             }
             else if(opcode == 0x5F) {
                 sre(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
             }
             else if(opcode == 0x7F) {
                 rra(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
                 if(same_page(addr, addr - cpu.x)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
             }
             cpu.pc += 3;
-            cpu_cycle += 4;
+            cpu.cycle += 4;
             break;
         //abs_y
         case 6:
@@ -1438,7 +1348,7 @@ int exec_instr() {
             addr = args[2] << 8;
             addr |= args[1];
             if(!same_page(addr, addr + cpu.y)) {
-                cpu_cycle += 1;
+                cpu.cycle += 1;
             }
             addr += cpu.y;
             if(opcode == 0xB9) {
@@ -1451,7 +1361,7 @@ int exec_instr() {
                 lax(bus_read(addr));
             }
             else if(opcode == 0x99) {
-                cpu_cycle += 1;
+                cpu.cycle += 1;
                 sta(addr, 5);
             }
             else if(opcode == 0x19) {
@@ -1474,30 +1384,30 @@ int exec_instr() {
             }
             else if(opcode == 0xDB) {
                 dcp(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0xFB) {
                 isc(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x1B) {
                 slo(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x3B) {
                 rla(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x5B) {
                 sre(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x7B) {
                 rra(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             cpu.pc += 3;
-            cpu_cycle += 4;
+            cpu.cycle += 4;
             break;
         //ind
         case 7:
@@ -1508,7 +1418,7 @@ int exec_instr() {
             if(opcode == 0x6C) {
                 jmp(bus_read(addr_hi), bus_read(addr_lo));
             }
-            cpu_cycle += 5;
+            cpu.cycle += 5;
             break;
         //x_ind
         case 8:
@@ -1547,30 +1457,30 @@ int exec_instr() {
             }
             else if(opcode == 0xC3) {
                 dcp(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0xE3) {
                 isc(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x03) {
                 slo(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x23) {
                 rla(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x43) {
                 sre(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x63) {
                 rra(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             cpu.pc += 2;
-            cpu_cycle += 6;
+            cpu.cycle += 6;
             break;
         //ind_y
         case 9:
@@ -1578,7 +1488,7 @@ int exec_instr() {
             int int_addr = bus_read((args[1] + 1) % 256) << 8;
             int_addr |= bus_read(args[1]);
             if(!same_page(int_addr, int_addr + cpu.y)) {
-                cpu_cycle += 1;
+                cpu.cycle += 1;
             }
             int_addr += cpu.y;
             addr = (short) int_addr;
@@ -1587,7 +1497,7 @@ int exec_instr() {
             }
             if(opcode == 0x91) {
                 if(same_page(int_addr, int_addr - cpu.y)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                     sta(addr, 6);
                 }
                 else {
@@ -1618,46 +1528,46 @@ int exec_instr() {
             else if(opcode == 0xD3) {
                 dcp(addr);
                 if(same_page(int_addr, int_addr - cpu.y)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0xF3) {
                 isc(addr);
                 if(same_page(int_addr, int_addr - cpu.y)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x13) {
                 slo(addr);
                 if(same_page(int_addr, int_addr - cpu.y)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x33) {
                 rla(addr);
                 if(same_page(int_addr, int_addr - cpu.y)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x53) {
                 sre(addr);
                 if(same_page(int_addr, int_addr - cpu.y)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x73) {
                 rra(addr);
                 if(same_page(int_addr, int_addr - cpu.y)) {
-                    cpu_cycle += 1;
+                    cpu.cycle += 1;
                 }
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
-            cpu_cycle += 5;
+            cpu.cycle += 5;
             cpu.pc += 2;
             break;
         //rel
@@ -1739,11 +1649,11 @@ int exec_instr() {
             }
             else if(opcode == 0xC7) {
                 dcp(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0xE7) {
                 isc(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0xE4) {
                 cpx(bus_read(addr));
@@ -1753,46 +1663,46 @@ int exec_instr() {
             }
             else if(opcode == 0x46) {
                 bus_write(addr, lsr(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0xE6) {
                 inc(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0xC6) {
                 dec(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x06) {
                 bus_write(addr, asl(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x66) {
                 bus_write(addr, ror(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x26) {
                 bus_write(addr, rol(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x07) {
                 slo(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x27) {
                 rla(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x47) {
                 sre(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x67) {
                 rra(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             cpu.pc += 2;
-            cpu_cycle += 3;
+            cpu.cycle += 3;
             break;
         //zpg_x
         case 12:
@@ -1830,54 +1740,54 @@ int exec_instr() {
             }
             else if(opcode == 0xD7) {
                 dcp(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0xF7) {
                 isc(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x56) {
                 bus_write(addr, lsr(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x16) {
                 bus_write(addr, asl(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x76) {
                 bus_write(addr, ror(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x36) {
                 bus_write(addr, rol(bus_read(addr)));
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0xF6) {
                 inc(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0xD6) {
                 dec(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x17) {
                 slo(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x37) {
                 rla(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x57) {
                 sre(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             else if(opcode == 0x77) {
                 rra(addr);
-                cpu_cycle += 2;
+                cpu.cycle += 2;
             }
             cpu.pc += 2;
-            cpu_cycle += 4;
+            cpu.cycle += 4;
             break;
         //zpg_y
         case 13:
@@ -1896,8 +1806,8 @@ int exec_instr() {
                 sax(addr);
             }
             cpu.pc += 2;
-            cpu_cycle += 4;
+            cpu.cycle += 4;
             break;
     }
-    return cpu_cycle;
+    return cpu.cycle;
 }

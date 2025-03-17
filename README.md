@@ -2,6 +2,8 @@
 
 ### progress 
 
+Donkey Kong and Pac-Man are both functional. Only games that use the default mapper are currently supported.
+
 * [x] CPU
 * PPU
     * [x] sprites

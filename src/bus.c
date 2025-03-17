@@ -1,7 +1,7 @@
 #include <stdio.h>
-#include "ppu.h"
 #include "controller.h"
 #include "cnes.h"
+#include "bus.h"
 
 #ifdef DEBUG
     #define DEBUG_PRINT(s) printf(s)
@@ -9,15 +9,7 @@
     #define DEBUG_PRINT(s) 
 #endif
 
-typedef struct Mem {
-    unsigned char *cpu_ram;  
-    unsigned char *rom;
-} Mem;
-
-Mem mem = {
-    .cpu_ram = NULL,
-    .rom = NULL,
-};
+static Mem mem;
 
 void bus_setup(unsigned char *cpu_mem, unsigned char *cpu_rom) {
     mem.cpu_ram = cpu_mem;    

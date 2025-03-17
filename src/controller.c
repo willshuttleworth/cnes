@@ -1,29 +1,9 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
 
-typedef struct Controller {
-    // array of size 8, one element per button
-    unsigned char *state;
-    // next state index to read
-    unsigned char index;
-    unsigned char strobe;
-} Controller;
+#include "controller.h"
 
-Controller controller = {
-    .state = NULL,
-    .index = 0,
-    .strobe = 0,
-};
-
-// joypad state
-// A -> B -> Select -> Start -> Up -> Down -> Left -> Right
-// all buttons can be 1 (pressed) or 0 unpressed
-// index: next bit to be read (button state)
-// strobe bit: lowest order bit in 0x4016
-//  - 1: reset index to 0, return A's state
-//  - 0: return state of index button, increment index
-//  read operation: read strobe bit and index, update index and return button val
-
+static Controller controller;
 void controller_setup(unsigned char *state) {
     controller.state = state;
 }
@@ -44,7 +24,6 @@ unsigned char controller_read() {
     return controller.state[controller.index - 1];
 }
 
-//instead of printing, update memory accordingly
 // returns -1 on SDL_QUIT input, 0 otherwise
 int handle_input(SDL_Event *event) {
     switch (event->type) {
