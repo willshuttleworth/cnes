@@ -73,23 +73,35 @@ void draw(int x, int y, int palette, int color, int sprite) {
 // TODO: implement 8x16 sprites
 // TODO: get rid of i/rev_i nonsense
 void draw_sprite(int index) {
+    int long_sprite_enabled = 0;
+    if((ppu.ctrl >> 5) & 1) long_sprite_enabled = 1;
     int x = ppu.oam[index * 4 + 3];
     int y = ppu.oam[index * 4];
     int flip_x = ((ppu.oam[index * 4 + 2] << 1) & 0x80) >> 7;
     int flip_y = (ppu.oam[index * 4 + 2] & 0x80) >> 7;
     unsigned short pattern_index = ppu.oam[index * 4 + 1];
     unsigned short base = (ppu.ctrl & 0x08) << 9;
-    pattern_index = base + pattern_index * 16;
 
+    // change base palette table if 8x16 sprites enabled
+    if((ppu.ctrl >> 5) & 1) {
+        if(ppu.oam[index * 4 + 1] & 1) base = 0x1000;
+        else base = 0;
+    }
+
+    pattern_index = base + pattern_index * 16;
     unsigned char palette = ppu.oam[index * 4 + 2] & 0x03;
+
+    int i_max = 8;
+    if(long_sprite_enabled) i_max = 16;
 
     int i, j, rev_i, rev_j; 
     if(flip_x) { j = 7; rev_j = 0; }
     else       { rev_j = 7; j = 0; }
-    if(flip_y) { i = 7; rev_i = 0; }
-    else       { rev_i = 7; i = 0; }
+    if(flip_y) { i = i_max - 1; rev_i = 0; }
+    else       { rev_i = i_max - 1; i = 0; }
 
-    while(i < 8 && i > -1) {
+
+    while(i < i_max && i > -1) {
         while(j < 8 && j > -1) {
             if(x + j > 255 || y + i > 240) {
                 if(flip_x) { j--; rev_j++; }
@@ -310,10 +322,12 @@ void data_write(unsigned char data) {
 }
 
 void ctrl_write(unsigned char data) {
+    /* TODO: is this special case ever needed?
     if(ppu.status >> 7 && data >> 7 && (ppu.ctrl >> 7) == 0) {
         printf("vblank special case: scanline %d dot %d\n", ppu.scanline, ppu.dot);
         *ppu.nmi = 1;
     }
+    */
     ppu.ctrl = data;
 }
 
