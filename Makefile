@@ -1,10 +1,10 @@
 TARGET = cnes 
 CC = gcc
-# TODO: compiler optimizations result in incorrect colors (only on macOS?)
-CFLAGS = -Wall -g
+CFLAGS = -Wall 
 OUTDIR = .
 DIR_OBJ = ./obj
-DEBUG_CFLAGS = -DDEBUG -DSHOW_FPS
+DEBUG_CFLAGS = -DDEBUG -DSHOW_FPS -g
+OPT_CFLAGS = -O3
 
 # SDL2 configuration
 CFLAGS += $(shell pkg-config --cflags sdl2)
@@ -20,6 +20,7 @@ INC_DIRS = -I$(INCS)
 
 .PHONY: all clean echoes
 
+all: CFLAGS += $(OPT_CFLAGS)
 all: $(TARGET)
 
 debug: CFLAGS += $(DEBUG_CFLAGS)
