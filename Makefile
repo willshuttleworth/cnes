@@ -4,7 +4,7 @@ CFLAGS = -Wall
 OUTDIR = .
 DIR_OBJ = ./obj
 DEBUG_CFLAGS = -DDEBUG -DSHOW_FPS -g
-OPT_CFLAGS = -O3
+OPT_CFLAGS = -O3 
 
 # SDL2 configuration
 CFLAGS += $(shell pkg-config --cflags sdl2)

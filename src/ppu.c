@@ -222,7 +222,9 @@ void ppu_tick_to(int cycle) {
     }
     ppu.scanline = -1;
     double elapsed = elapsed_time();
-    SDL_Delay(16 - elapsed);
+    if(elapsed <= 17) {
+        SDL_Delay(17 - elapsed);
+    }
     END_TIMER();
 }
 
