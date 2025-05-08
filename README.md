@@ -1,4 +1,4 @@
-## nes emulator written in C with SDL
+## NES emulator written in C with SDL
 
 ### progress 
 
@@ -11,7 +11,10 @@ Donkey Kong and Pac-Man are both functional. Only games that use the default map
     * [x] correct colors
     * [ ] 8x16 sprites
     * [ ] scrolling
-* [ ] mappers
+* Mappers
+    * [x] 0
+    * [ ] MMC1
+    * [ ] MMC3
 * [ ] APU
 * [ ] configurable controls
 
@@ -20,8 +23,10 @@ Donkey Kong and Pac-Man are both functional. Only games that use the default map
 dependencies: gcc, SDL2, and pkg-config (for cross platform SDL flags)
 
 build steps
-* run `make` from the root of the repo
-* to run: `./cnes <path/to/rom>`
+```
+$ make
+$ ./cnes </path/to/rom>
+```
 
 ### button mapping
 

@@ -1,9 +1,9 @@
 TARGET = cnes 
 CC = gcc
-CFLAGS = -Wall 
+CFLAGS = -Wall
 OUTDIR = .
 DIR_OBJ = ./obj
-DEBUG_CFLAGS = -DDEBUG -DSHOW_FPS -g
+DEBUG_CFLAGS = -DDEBUG -DSHOW_FPS -g 
 OPT_CFLAGS = -O3 
 
 # SDL2 configuration

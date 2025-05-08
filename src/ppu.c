@@ -60,7 +60,6 @@ void draw(int x, int y, int palette, int color, int sprite) {
         palette_addr = palette * 4 + color;
     }
     unsigned char sys_color = ppu.palette[palette_addr];
-    // only drawing white pixels, not background ones
     if(color != 0) {
         ppu.pixels[pixel] = SYS_COLORS[sys_color][0];
         ppu.pixels[pixel + 1] = SYS_COLORS[sys_color][1];
@@ -68,7 +67,6 @@ void draw(int x, int y, int palette, int color, int sprite) {
     }
 }
 
-// TODO: implement priority after background drawing done
 //  - draw sprite if it has priority OR background is transparent
 // TODO: implement 8x16 sprites
 // TODO: get rid of i/rev_i nonsense
@@ -128,12 +126,83 @@ void draw_sprite(int index) {
     }
 }
 
+void draw_sprites() {
+    for(int i = 0; i < 64; i++) {
+        if(ppu.oam[i * 4] - 1 == ppu.scanline && (ppu.oam[i * 4 + 2] & 0x20) == 0) {
+            // check if sprite rendering enabled
+            if(ppu.mask & 0x10 && ppu.curr < 8) {
+                draw_sprite(i);
+                ppu.curr++;
+            }
+            else if(ppu.curr == 8) {
+                ppu.ctrl |= 0x20;
+            }
+        }
+    }
+}
+
+void draw_background() {
+    // TODO: this is hardcoded to only use first nametable
+    // each one of these bytes indexes pattern table
+    // within this loop, loop over all 64 pixels in the 8x8 section, using draw() to set color of each in pixels array
+
+    // number of 8x8 pixel blocks
+    int num_blocks = (256 * 240) / 64;
+    for(int i = 0; i < num_blocks; i++) {
+        unsigned short pattern_index = ppu.vram[i];
+        unsigned short base = (ppu.ctrl & 0x10) << 8;
+        pattern_index = base + pattern_index * 16;
+        int palette = 0;
+        int block_row = (i / 128);
+        int block_col = i % 32 / 4;
+        int block = block_row * 8 + block_col;
+        /// TODO: hardcoded to first nametable
+        unsigned char block_data = ppu.vram[0x03C0 + block];
+        int row = i / 32;
+        int col = i % 32;
+        // tl
+        if((row % 4 == 0 || row % 4 == 1) && (col % 4 == 0 || col % 4 == 1)) {
+            palette = block_data & 0x3;
+        }
+        // tr
+        else if((row % 4 == 0 || row % 4 == 1) && (col % 4 == 2 || col % 4 == 3)) {
+            palette = (block_data >> 2) & 0x3;
+        }
+        // bl
+        else if((row % 4 == 2 || row % 4 == 3) && (col % 4 == 0 || col % 4 == 1)) {
+            palette = (block_data >> 4) & 0x3;
+        }
+        // br
+        else {
+            palette = (block_data >> 6) & 0x3;
+        }
+
+        for(int j = 0; j < 8; j++) {
+            for(int k = 0; k < 8; k++) {
+                int hi = ((ppu.chrom[pattern_index + 8 + j] << k) & 0x80) >> 7;
+                int lo = ((ppu.chrom[pattern_index + j] << k) & 0x80) >> 7;
+                unsigned char color = (hi << 1) + lo;
+                int x = (i % 32) * 8;
+                int y = (i / 32) * 8;
+                draw(x + k, y + j, palette, color, 0);
+            }
+        }
+    }
+}
+
+void update_screen() {
+    SDL_UpdateTexture(ppu.texture, NULL, ppu.pixels, 256 * 3);
+    SDL_RenderCopy(ppu.renderer, ppu.texture, NULL, NULL);
+    SDL_RenderPresent(ppu.renderer);
+    memset(ppu.pixels, 0, 256 * 240 * 3);
+}
+
 void ppu_tick_to(int cycle) {
     if(ppu.scanline == -1 && ppu.dot == 0) {
-       start_frame_timer(); 
+        start_frame_timer(); 
+        ppu.status &= 0x1F;
     }
     while(ppu.scanline <= 260) {
-        // read oam, find sprites on this scanline
         ppu.curr = 0;
         while(ppu.dot <= 340) {
             if(ppu.ppu_cycle >= (cycle * 3)) {
@@ -142,63 +211,9 @@ void ppu_tick_to(int cycle) {
             if(ppu.dot == 0 && ppu.scanline < 240) {
                 if(ppu.scanline == -1) {
                     ppu.ctrl &= 0xDF;
-                    
-                    // TODO: this is hardcoded to only use first nametable
-                    // each one of these bytes indexes pattern table
-                    // within this loop, loop over all 64 pixels in the 8x8 section, using draw() to set color of each in pixels array
-                    for(int i = 0; i < 0x03C0; i++) {
-                        unsigned short pattern_index = ppu.vram[i];
-                        unsigned short base = (ppu.ctrl & 0x10) << 8;
-                        pattern_index = base + pattern_index * 16;
-                        int palette = 0;
-                        int block_row = (i / 128);
-                        int block_col = i % 32 / 4;
-                        int block = block_row * 8 + block_col;
-                        /// TODO: hardcoded to first nametable
-                        unsigned char block_data = ppu.vram[0x03C0 + block];
-                        int row = i / 32;
-                        int col = i % 32;
-                        // tl
-                        if((row % 4 == 0 || row % 4 == 1) && (col % 4 == 0 || col % 4 == 1)) {
-                            palette = block_data & 0x3;
-                        }
-                        // tr
-                        else if((row % 4 == 0 || row % 4 == 1) && (col % 4 == 2 || col % 4 == 3)) {
-                            palette = (block_data >> 2) & 0x3;
-                        }
-                        // bl
-                        else if((row % 4 == 2 || row % 4 == 3) && (col % 4 == 0 || col % 4 == 1)) {
-                            palette = (block_data >> 4) & 0x3;
-                        }
-                        // br
-                        else {
-                            palette = (block_data >> 6) & 0x3;
-                        }
-
-                        for(int j = 0; j < 8; j++) {
-                            for(int k = 0; k < 8; k++) {
-                                int hi = ((ppu.chrom[pattern_index + 8 + j] << k) & 0x80) >> 7;
-                                int lo = ((ppu.chrom[pattern_index + j] << k) & 0x80) >> 7;
-                                unsigned char color = (hi << 1) + lo;
-                                int x = (i % 32) * 8;
-                                int y = (i / 32) * 8;
-                                draw(x + k, y + j, palette, color, 0);
-                            }
-                        }
-                    }
+                    draw_background(); 
                 }
-                for(int i = 0; i < 64; i++) {
-                    if(ppu.oam[i * 4] - 1 == ppu.scanline && (ppu.oam[i * 4 + 2] & 0x20) == 0) {
-                        // check if sprite rendering enabled
-                        if(ppu.mask & 0x10 && ppu.curr < 8) {
-                            draw_sprite(i);
-                            ppu.curr++;
-                        }
-                        else if(ppu.curr == 8) {
-                            ppu.ctrl |= 0x20;
-                        }
-                    }
-                }
+                draw_sprites();
             }
             if(ppu.scanline == 241 && ppu.dot == 1) {
                 if(ppu.ctrl >> 7) {
@@ -206,13 +221,7 @@ void ppu_tick_to(int cycle) {
                     *ppu.nmi = 1;
                 }
                 ppu.status |= 0x80;
-                SDL_UpdateTexture(ppu.texture, NULL, ppu.pixels, 256 * 3);
-                SDL_RenderCopy(ppu.renderer, ppu.texture, NULL, NULL);
-                SDL_RenderPresent(ppu.renderer);
-                memset(ppu.pixels, 0, 256 * 240 * 3);
-            }
-            if(ppu.scanline == -1 && ppu.dot == 0) {
-                ppu.status &= 0x1F;
+                update_screen();
             }
             ppu.ppu_cycle++;
             ppu.dot++;

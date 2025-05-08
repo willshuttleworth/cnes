@@ -122,6 +122,7 @@ char *parse_blocks(FILE *file) {
         fseek(file, 512, SEEK_CUR);
     }
     char *ret = malloc(2);
+    if(!ret) exit(-1);
     ret[0] = h.prg_rom_size;
     ret[1] = h.chr_rom_size;
     return ret;
